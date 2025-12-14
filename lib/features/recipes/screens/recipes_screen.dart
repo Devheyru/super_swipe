@@ -132,7 +132,10 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                 ),
               ),
               data: (recipes) {
-                if (recipes.isEmpty) {
+                // Fix #13: Apply functional filtering
+                final filteredRecipes = _filterRecipes(recipes);
+
+                if (filteredRecipes.isEmpty) {
                   return SliverFillRemaining(
                     child: Center(
                       child: Column(
@@ -145,7 +148,9 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'No Saved Recipes Yet',
+                            _selectedFilter == 0
+                                ? 'No Saved Recipes Yet'
+                                : 'No Recipes Match Filter',
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -153,7 +158,9 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 48),
                             child: Text(
-                              'Start swiping to unlock and save delicious recipes!',
+                              _selectedFilter == 0
+                                  ? 'Start swiping to unlock and save delicious recipes!'
+                                  : 'Try selecting a different filter',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.grey[600],
@@ -162,25 +169,26 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                             ),
                           ),
                           const SizedBox(height: 32),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              // Navigate to swipe screen
-                              // You can add navigation here if needed
-                            },
-                            icon: const Icon(Icons.swipe_rounded),
-                            label: const Text('Start Swiping'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          if (_selectedFilter == 0)
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                // Navigate to swipe screen
+                                // You can add navigation here if needed
+                              },
+                              icon: const Icon(Icons.swipe_rounded),
+                              label: const Text('Start Swiping'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -193,9 +201,12 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                   ),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          _buildRecipeCard(context, recipes[index], userId),
-                      childCount: recipes.length,
+                      (context, index) => _buildRecipeCard(
+                        context,
+                        filteredRecipes[index],
+                        userId,
+                      ),
+                      childCount: filteredRecipes.length,
                     ),
                   ),
                 );
@@ -207,6 +218,20 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
         ),
       ),
     );
+  }
+
+  /// Fix #13: Filter recipes based on selected filter
+  List<Recipe> _filterRecipes(List<Recipe> recipes) {
+    switch (_selectedFilter) {
+      case 0: // All
+        return recipes;
+      case 1: // Recent
+        return recipes.take(10).toList();
+      case 2: // Favorites
+        return recipes.where((r) => r.stats.popularityScore > 50).toList();
+      default:
+        return recipes;
+    }
   }
 
   Widget _buildFilterChip(String label, int index) {

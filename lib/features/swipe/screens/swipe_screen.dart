@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/models/recipe.dart';
 import 'package:super_swipe/core/providers/firestore_providers.dart';
 import 'package:super_swipe/core/providers/user_data_providers.dart';
-import 'package:super_swipe/core/providers/recipe_providers.dart';
+
 import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
@@ -133,21 +133,17 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     }
 
     try {
-      // Spend carrot in Firestore
+      // Fix #15: Use atomic transaction for unlocking
       final success = await ref
           .read(userServiceProvider)
-          .spendCarrots(userId, 1);
+          .unlockRecipe(userId, recipe);
 
       if (!success) {
         _showOutOfCarrots();
         return false;
       }
 
-      // Save recipe to Firestore
-      await ref.read(recipeServiceProvider).saveRecipe(userId, recipe);
-
-      // Update stats
-      await ref.read(userServiceProvider).incrementRecipesUnlocked(userId);
+      // Stats are now updated atomically in unlockRecipe
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
