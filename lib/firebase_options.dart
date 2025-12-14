@@ -3,7 +3,6 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -47,30 +46,30 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static FirebaseOptions android = FirebaseOptions(
-    apiKey: dotenv.env['ANDROID_API_KEY']!,
-    appId: dotenv.env['ANDROID_APP_ID']!,
-    messagingSenderId: dotenv.env['ANDROID_MESSAGING_SENDER_ID']!,
-    projectId: dotenv.env['ANDROID_PROJECT_ID']!,
-    storageBucket: dotenv.env['ANDROID_STORAGE_BUCKET']!,
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyDZ1B_mHuXW0ghIDlGPgZOLpluyjB8M7Gc',
+    appId: '1:234523168738:android:eb04097bdfac4b514ff3bb',
+    messagingSenderId: '234523168738',
+    projectId: 'super-swipe-erin-2025',
+    storageBucket: 'super-swipe-erin-2025.firebasestorage.app',
   );
 
-  static FirebaseOptions ios = FirebaseOptions(
-    apiKey: dotenv.env['IOS_API_KEY']!,
-    appId: dotenv.env['IOS_APP_ID']!,
-    messagingSenderId: dotenv.env['IOS_MESSAGING_SENDER_ID']!,
-    projectId: dotenv.env['IOS_PROJECT_ID']!,
-    storageBucket: dotenv.env['IOS_STORAGE_BUCKET']!,
-    iosBundleId: dotenv.env['IOS_BUNDLE_ID']!,
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCBi8W_OoKaiDANFHpkhaM79hyD_XxPpB0',
+    appId: '1:234523168738:ios:214ed6bcd49ff8174ff3bb',
+    messagingSenderId: '234523168738',
+    projectId: 'super-swipe-erin-2025',
+    storageBucket: 'super-swipe-erin-2025.firebasestorage.app',
+    iosBundleId: 'com.superswipe.app',
   );
 
-  static FirebaseOptions web = FirebaseOptions(
-    apiKey: dotenv.env['WEB_API_KEY']!,
-    appId: dotenv.env['WEB_APP_ID']!,
-    messagingSenderId: dotenv.env['WEB_MESSAGING_SENDER_ID']!,
-    projectId: dotenv.env['WEB_PROJECT_ID']!,
-    authDomain: dotenv.env['WEB_AUTH_DOMAIN'],
-    storageBucket: dotenv.env['WEB_STORAGE_BUCKET'],
-    measurementId: dotenv.env['WEB_MEASUREMENT_ID'],
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCMgMI9hfQyhpOngDOP-Wi44YaN2QXJecI',
+    appId: '1:234523168738:web:ca977802e42fcaf04ff3bb',
+    messagingSenderId: '234523168738',
+    projectId: 'super-swipe-erin-2025',
+    authDomain: 'super-swipe-erin-2025.firebaseapp.com',
+    storageBucket: 'super-swipe-erin-2025.firebasestorage.app',
   );
+
 }

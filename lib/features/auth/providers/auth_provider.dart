@@ -78,7 +78,8 @@ class AuthNotifier extends Notifier<AuthState> {
       name = _pendingDisplayName;
     }
 
-    // 2. If still missing, try fetching from Firestore
+    // 2. If still missing, try fetching from Firestore (REMOVED for Supabase migration)
+    /*
     if (user != null && !user.isAnonymous && (name == null || name.isEmpty)) {
       try {
         final profile = await _authService.getUserProfile(user.uid);
@@ -89,6 +90,7 @@ class AuthNotifier extends Notifier<AuthState> {
         // Ignore error, fallback to null
       }
     }
+    */
 
     // 3. Fallback to existing state if valid
     if ((name == null || name.isEmpty) &&
@@ -123,7 +125,9 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<bool> signIn({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     final result = await _authService.signInWithEmailAndPassword(
-        email: email, password: password);
+      email: email,
+      password: password,
+    );
     if (result.success) {
       // _handleUserChange will be called by the listener, but we can set state optimistically if needed
       // For now, let the listener handle it to ensure consistency
@@ -152,10 +156,11 @@ class AuthNotifier extends Notifier<AuthState> {
     if (result.success) {
       // Explicitly set the display name since we just created it
       state = state.copyWith(
-          user: result.user,
-          displayName: displayName,
-          isLoading: false,
-          hasSeenOnboarding: true);
+        user: result.user,
+        displayName: displayName,
+        isLoading: false,
+        hasSeenOnboarding: true,
+      );
 
       // Force a reload after a short delay to ensure the profile update propagates
       // and triggers the userChanges stream with the correct name.
@@ -216,7 +221,9 @@ class AuthNotifier extends Notifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
     final result = await _authService.sendPasswordResetEmail(email: email);
     state = state.copyWith(
-        isLoading: false, error: result.success ? null : result.errorMessage);
+      isLoading: false,
+      error: result.success ? null : result.errorMessage,
+    );
     return result.success;
   }
 
@@ -226,11 +233,14 @@ class AuthNotifier extends Notifier<AuthState> {
 }
 
 /// Main auth provider
-final authProvider =
-    NotifierProvider<AuthNotifier, AuthState>(() => AuthNotifier());
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(
+  () => AuthNotifier(),
+);
 
 /// Convenience providers
-final isSignedInProvider =
-    Provider<bool>((ref) => ref.watch(authProvider).isSignedIn);
-final currentUserProvider =
-    Provider<User?>((ref) => ref.watch(authProvider).user);
+final isSignedInProvider = Provider<bool>(
+  (ref) => ref.watch(authProvider).isSignedIn,
+);
+final currentUserProvider = Provider<User?>(
+  (ref) => ref.watch(authProvider).user,
+);

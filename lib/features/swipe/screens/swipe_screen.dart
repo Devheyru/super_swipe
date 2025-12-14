@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/models/recipe.dart';
-import 'package:super_swipe/core/providers/app_state_provider.dart';
+import 'package:super_swipe/core/providers/firestore_providers.dart';
+import 'package:super_swipe/core/providers/user_data_providers.dart';
+import 'package:super_swipe/core/providers/recipe_providers.dart';
 import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
+import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 
 class SwipeScreen extends ConsumerStatefulWidget {
   const SwipeScreen({super.key});
@@ -18,6 +21,12 @@ class SwipeScreen extends ConsumerStatefulWidget {
 class _SwipeScreenState extends ConsumerState<SwipeScreen> {
   final AppinioSwiperController _swiperController = AppinioSwiperController();
   int _selectedEnergyLevel = 2; // Default to 'Okay'
+
+  @override
+  void dispose() {
+    _swiperController.dispose();
+    super.dispose();
+  }
 
   // Mock Recipes
   final List<Recipe> _recipes = [
@@ -91,10 +100,14 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
   ];
 
   void _onSwipeEnd(
-      int previousIndex, int targetIndex, SwiperActivity activity) {
+    int previousIndex,
+    int targetIndex,
+    SwiperActivity activity,
+  ) {
     if (activity is Swipe) {
-      final filteredRecipes =
-          _recipes.where((r) => r.energyLevel == _selectedEnergyLevel).toList();
+      final filteredRecipes = _recipes
+          .where((r) => r.energyLevel == _selectedEnergyLevel)
+          .toList();
       if (previousIndex < filteredRecipes.length) {
         if (activity.direction == AxisDirection.right) {
           _handleRightSwipe(filteredRecipes[previousIndex]);
@@ -105,31 +118,59 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     }
   }
 
-  bool _unlockRecipe(Recipe recipe) {
-    final appNotifier = ref.read(appStateProvider.notifier);
-    final appState = ref.read(appStateProvider);
+  Future<bool> _unlockRecipe(Recipe recipe) async {
+    final userId = ref.read(authProvider).user?.uid;
 
-    if (appState.isGuest) {
+    if (userId == null) {
       _showLoginPrompt();
       return false;
     }
-    if (!appNotifier.canSwipeRight()) {
+
+    final userProfile = ref.read(userProfileProvider).value;
+    if (userProfile == null || userProfile.carrots.current <= 0) {
       _showOutOfCarrots();
       return false;
     }
-    appNotifier.unlockRecipe(recipe);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Recipe Unlocked! 🎉 -1 Carrot'),
-        backgroundColor: AppTheme.primaryColor,
-        duration: Duration(seconds: 1),
-      ),
-    );
-    return true;
+
+    try {
+      // Spend carrot in Firestore
+      final success = await ref
+          .read(userServiceProvider)
+          .spendCarrots(userId, 1);
+
+      if (!success) {
+        _showOutOfCarrots();
+        return false;
+      }
+
+      // Save recipe to Firestore
+      await ref.read(recipeServiceProvider).saveRecipe(userId, recipe);
+
+      // Update stats
+      await ref.read(userServiceProvider).incrementRecipesUnlocked(userId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recipe Unlocked & Saved! 🎉 -1 Carrot'),
+            backgroundColor: AppTheme.primaryColor,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+      return false;
+    }
   }
 
-  void _handleRightSwipe(Recipe recipe) {
-    _promptUnlockFlow(recipe);
+  void _handleRightSwipe(Recipe recipe) async {
+    await _promptUnlockFlow(recipe);
   }
 
   void _showLoginPrompt() {
@@ -137,12 +178,14 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Login Required'),
-        content:
-            const Text('Unlocking recipes requires login. Continue to login?'),
+        content: const Text(
+          'Unlocking recipes requires login. Continue to login?',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
@@ -166,145 +209,208 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = ref.watch(appStateProvider);
-    final appNotifier = ref.read(appStateProvider.notifier);
-    final filteredRecipes =
-        _recipes.where((r) => r.energyLevel == _selectedEnergyLevel).toList();
+    final userProfileAsync = ref.watch(userProfileProvider);
+    final filteredRecipes = _recipes
+        .where((r) => r.energyLevel == _selectedEnergyLevel)
+        .toList();
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: const Text('Swipe for Supper'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(
-                right: AppTheme.spacingL,
-                top: AppTheme.spacingS,
-                bottom: AppTheme.spacingS),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey.shade200),
+    return userProfileAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(title: const Text('Swipe for Supper')),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(title: const Text('Swipe for Supper')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text('Error loading profile: $error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.go(AppRoutes.home),
+                child: const Text('Go Home'),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            ],
+          ),
+        ),
+      ),
+      data: (userProfile) {
+        if (userProfile == null) {
+          return Scaffold(
+            backgroundColor: AppTheme.backgroundColor,
+            appBar: AppBar(title: const Text('Swipe for Supper')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    '${appState.carrotCount}/5',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary),
+                  const Text('Please sign in to continue'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.go(AppRoutes.login),
+                    child: const Text('Sign In'),
                   ),
-                  const SizedBox(width: 4),
-                  const Text('🥕', style: TextStyle(fontSize: 16)),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterPanel(appState, appNotifier),
-          const SizedBox(height: AppTheme.spacingS),
-          // Energy Slider (Refactored from RecipesScreen)
-          _buildEnergySlider(context),
+          );
+        }
 
-          const SizedBox(height: AppTheme.spacingM),
+        final carrotCount = userProfile.carrots.current;
+        final maxCarrots = userProfile.carrots.max;
+        final canUnlock = carrotCount > 0;
 
-          // Card Stack
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(AppTheme.spacingM),
-              child: filteredRecipes.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.search_off_rounded,
-                              size: 48, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No recipes for this energy level!',
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                        ],
+        return Scaffold(
+          backgroundColor: AppTheme.backgroundColor,
+          appBar: AppBar(
+            title: const Text('Swipe for Supper'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(
+                  right: AppTheme.spacingL,
+                  top: AppTheme.spacingS,
+                  bottom: AppTheme.spacingS,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$carrotCount/$maxCarrots',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
-                    )
-                  : AppinioSwiper(
-                      key: ValueKey(
-                          '${_selectedEnergyLevel}_${appState.carrotCount}_${appState.isGuest}'),
-                      controller: _swiperController,
-                      cardCount: filteredRecipes.length,
-                      onSwipeEnd: _onSwipeEnd,
-                      swipeOptions: SwipeOptions.only(
-                          left: true, right: appNotifier.canSwipeRight()),
-                      cardBuilder: (context, index) {
-                        if (index >= filteredRecipes.length) {
-                          return const SizedBox();
-                        }
-                        return _buildRecipeCard(filteredRecipes[index]);
-                      },
-                    ),
-            ),
-          ),
-
-          // Action Buttons
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTheme.spacingL),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildActionButton(
-                  icon: Icons.close_rounded,
-                  color: AppTheme.errorColor,
-                  onPressed: () => _swiperController.swipeLeft(),
-                ),
-                const SizedBox(width: AppTheme.spacingXL),
-                _buildActionButton(
-                  icon: Icons.info_outline_rounded,
-                  color: Colors.blueGrey,
-                  isSmall: true,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Tap View Ingredients on the card.')),
-                    );
-                  },
-                ),
-                const SizedBox(width: AppTheme.spacingXL),
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: appNotifier.canSwipeRight() ? 1.0 : 0.5,
-                  child: _buildActionButton(
-                    icon: Icons.favorite_rounded,
-                    color: AppTheme.primaryColor,
-                    onPressed: () {
-                      if (appState.isGuest) {
-                        _showLoginPrompt();
-                        return;
-                      }
-                      if (appNotifier.canSwipeRight()) {
-                        _swiperController.swipeRight();
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Out of Carrots! 🥕')),
-                        );
-                      }
-                    },
+                      const SizedBox(width: 4),
+                      const Text('🥕', style: TextStyle(fontSize: 16)),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+          body: Column(
+            children: [
+              const SizedBox(height: AppTheme.spacingS),
+              // Energy Slider
+              _buildEnergySlider(),
+
+              const SizedBox(height: AppTheme.spacingM),
+
+              // Card Stack
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingM),
+                  child: filteredRecipes.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.search_off_rounded,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No recipes for this energy level!',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
+                          ),
+                        )
+                      : AppinioSwiper(
+                          key: ValueKey('${_selectedEnergyLevel}_$carrotCount'),
+                          controller: _swiperController,
+                          cardCount: filteredRecipes.length,
+                          onSwipeEnd: _onSwipeEnd,
+                          swipeOptions: SwipeOptions.only(
+                            left: true,
+                            right: canUnlock,
+                          ),
+                          cardBuilder: (context, index) {
+                            if (index >= filteredRecipes.length) {
+                              return const SizedBox();
+                            }
+                            return _buildRecipeCard(filteredRecipes[index]);
+                          },
+                        ),
+                ),
+              ),
+
+              // Action Buttons
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppTheme.spacingL),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildActionButton(
+                      icon: Icons.close_rounded,
+                      color: AppTheme.errorColor,
+                      onPressed: () => _swiperController.swipeLeft(),
+                    ),
+                    const SizedBox(width: AppTheme.spacingXL),
+                    _buildActionButton(
+                      icon: Icons.info_outline_rounded,
+                      color: Colors.blueGrey,
+                      isSmall: true,
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tap View Ingredients on the card.'),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: AppTheme.spacingXL),
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: canUnlock ? 1.0 : 0.5,
+                      child: _buildActionButton(
+                        icon: Icons.favorite_rounded,
+                        color: AppTheme.primaryColor,
+                        onPressed: () {
+                          if (ref.read(authProvider).user == null) {
+                            _showLoginPrompt();
+                            return;
+                          }
+                          if (canUnlock) {
+                            _swiperController.swipeRight();
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Out of Carrots! 🥕'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildEnergySlider(BuildContext context) {
+  Widget _buildEnergySlider() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
@@ -320,15 +426,19 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Energy Level',
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelLarge
-                        ?.copyWith(color: AppTheme.textSecondary)),
-                Text(_getEnergyLabel(_selectedEnergyLevel),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor)),
+                Text(
+                  'Energy Level',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                Text(
+                  _getEnergyLabel(_selectedEnergyLevel),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
               ],
             ),
           ),
@@ -351,62 +461,6 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterPanel(AppState appState, AppStateNotifier appNotifier) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppTheme.spacingM, vertical: AppTheme.spacingS),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: AppTheme.borderRadiusLarge,
-          boxShadow: AppTheme.softShadow,
-        ),
-        child: Column(
-          children: [
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
-              title: const Text('Filters'),
-              trailing: IconButton(
-                onPressed: () =>
-                    appNotifier.setFilterExpanded(!appState.filterExpanded),
-                icon: Icon(
-                  Icons.filter_list_rounded,
-                  color: appState.filterExpanded
-                      ? AppTheme.primaryColor
-                      : Colors.grey.shade400,
-                ),
-                tooltip: appState.filterExpanded
-                    ? 'Collapse Filters'
-                    : 'Expand Filters',
-              ),
-            ),
-            if (appState.filterExpanded)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(
-                    AppTheme.spacingM, 0, AppTheme.spacingM, AppTheme.spacingM),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _FilterChip(label: 'Breakfast'),
-                    _FilterChip(label: 'Lunch'),
-                    _FilterChip(label: 'Dinner'),
-                    _FilterChip(label: 'Sweet'),
-                    _FilterChip(label: 'Savory'),
-                    _FilterChip(label: 'Spicy'),
-                    _FilterChip(label: 'Under 30 min'),
-                    _FilterChip(label: 'High Protein'),
-                    _FilterChip(label: 'Low Cal'),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -453,8 +507,11 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                     ),
                     errorWidget: (context, url, error) => Container(
                       color: Colors.grey.shade200,
-                      child: const Icon(Icons.broken_image,
-                          size: 80, color: Colors.grey),
+                      child: const Icon(
+                        Icons.broken_image,
+                        size: 80,
+                        color: Colors.grey,
+                      ),
                     ),
                   )
                 else
@@ -463,8 +520,11 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
                       color: Colors.grey.shade200,
-                      child:
-                          const Icon(Icons.image, size: 80, color: Colors.grey),
+                      child: const Icon(
+                        Icons.image,
+                        size: 80,
+                        color: Colors.grey,
+                      ),
                     ),
                   ),
                 // Gradient Overlay
@@ -476,7 +536,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.8)
+                          Colors.black.withValues(alpha: 0.8),
                         ],
                         stops: const [0.6, 1.0],
                       ),
@@ -502,10 +562,14 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                       _buildTag('${recipe.timeMinutes} min', Icons.access_time),
                       const SizedBox(width: 8),
                       _buildTag(
-                          '${recipe.ingredients.length} items', Icons.list),
+                        '${recipe.ingredients.length} items',
+                        Icons.list,
+                      ),
                       const SizedBox(width: 8),
-                      _buildTag('${recipe.calories} cal',
-                          Icons.local_fire_department),
+                      _buildTag(
+                        '${recipe.calories} cal',
+                        Icons.local_fire_department,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -550,7 +614,8 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                         backgroundColor: AppTheme.primaryColor,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         elevation: 0,
                       ),
                       child: const Text('View Ingredients'),
@@ -561,15 +626,22 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () => _promptUnlockDirections(recipe),
-                      icon: const Icon(Icons.menu_book_outlined,
-                          size: 18, color: Colors.white),
-                      label: const Text('Show Directions',
-                          style: TextStyle(color: Colors.white)),
+                      icon: const Icon(
+                        Icons.menu_book_outlined,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Show Directions',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.6)),
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -593,21 +665,25 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
         children: [
           Icon(icon, color: Colors.white, size: 12),
           const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton(
-      {required IconData icon,
-      required Color color,
-      required VoidCallback onPressed,
-      bool isSmall = false}) {
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+    bool isSmall = false,
+  }) {
     final size = isSmall ? 50.0 : 64.0;
     return Container(
       width: size,
@@ -660,108 +736,45 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     _promptUnlockFlow(recipe, fromDirections: true);
   }
 
-  void _promptUnlockFlow(Recipe recipe, {bool fromDirections = false}) {
-    final appState = ref.read(appStateProvider);
-    final appNotifier = ref.read(appStateProvider.notifier);
+  Future<void> _promptUnlockFlow(
+    Recipe recipe, {
+    bool fromDirections = false,
+  }) async {
+    final userId = ref.read(authProvider).user?.uid;
 
-    if (appState.isGuest) {
+    if (userId == null) {
       _showLoginPrompt();
       return;
     }
 
-    // If user chose to skip reminder, show reduced modal
-    if (appState.skipUnlockReminder) {
-      _showReducedUnlockModal(recipe);
+    final userProfile = ref.read(userProfileProvider).value;
+    if (userProfile == null || userProfile.carrots.current <= 0) {
+      _showOutOfCarrots();
       return;
     }
 
-    // Full reminder with checkbox
+    // Simple unlock confirmation
     showDialog(
       context: context,
-      builder: (context) {
-        bool skip = appState.skipUnlockReminder;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Unlock Recipe'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Unlock directions? This will use one carrot.'),
-                const SizedBox(height: 12),
-                CheckboxListTile(
-                  value: skip,
-                  onChanged: (val) => setState(() => skip = val ?? false),
-                  title: const Text('Do not show this reminder again'),
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref
-                      .read(appStateProvider.notifier)
-                      .setSkipUnlockReminder(skip);
-                  if (appNotifier.canSwipeRight()) {
-                    _unlockRecipe(recipe);
-                  } else {
-                    _showOutOfCarrots();
-                  }
-                },
-                child: const Text('Unlock'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showReducedUnlockModal(Recipe recipe) {
-    final appNotifier = ref.read(appStateProvider.notifier);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Unlock recipe?'),
-        content: const Text('Uses one carrot.'),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unlock Recipe'),
+        content: const Text(
+          'Unlock this recipe? This will use 1 carrot and save the recipe to your collection.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              if (appNotifier.canSwipeRight()) {
-                _unlockRecipe(recipe);
-              } else {
-                _showOutOfCarrots();
-              }
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await _unlockRecipe(recipe);
             },
             child: const Text('Unlock'),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(label),
-      backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.15),
-      labelStyle: const TextStyle(
-          color: AppTheme.primaryDark, fontWeight: FontWeight.w600),
     );
   }
 }

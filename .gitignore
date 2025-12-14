@@ -5,7 +5,6 @@
 *.swp
 .DS_Store
 .atom/
-.build/
 .buildlog/
 .history
 .svn/
@@ -17,8 +16,10 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# VS Code related
-.vscode/
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -26,11 +27,10 @@ migrate_working_dir/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 /build/
-*.lock
-!pubspec.lock
 
 # Symbolication related
 app.*.symbols
@@ -38,14 +38,16 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
-# Android Studio
-/android/app/debug
-/android/app/profile
-/android/app/release
-.gradle/
-local.properties
+# Android related
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
 *.jks
-key.properties
 
 # iOS/XCode related
 **/ios/**/*.mode1v3
@@ -70,6 +72,10 @@ key.properties
 **/ios/Flutter/Flutter.podspec
 **/ios/Flutter/Generated.xcconfig
 **/ios/Flutter/ephemeral
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/flutter_export_environment.sh
 **/ios/ServiceDefinitions.json
 **/ios/Runner/GeneratedPluginRegistrant.*
 
@@ -90,26 +96,60 @@ key.properties
 # Coverage
 coverage/
 
-# Test
-.test_coverage.dart
-.test/
-
-# Exceptions to above rules
+# Exceptions to above rules.
 !**/ios/**/default.mode1v3
 !**/ios/**/default.mode2v3
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
+!/dev/ci/**/Gemfile.lock
 
-# Firebase (keep firebase_options.dart but ignore sensitive files)
-**/google-services.json
+# Web specific
+/web/*.js
+/web/*.js.map
+
+# VSCode
+.vscode/
+
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+.firebaserc
+
+# Firebase Configuration Files (SENSITIVE - DO NOT COMMIT)
 **/GoogleService-Info.plist
-firebase_debug.log
+**/google-services.json
+firebase_options.dart
 
 # Environment files
 .env
-.env.*
-*.env
+.env.local
+.env.production
+.env.*.local
 
-# Generated files
-*.g.dart
-*.freezed.dart
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS specific
+Thumbs.db
+.DS_Store
+
+# Custom: Temporary documentation (keep only README.md and SYSTEM_DOCUMENTATION.md)
+.agent/
+*_COMPLETE.md
+*_FIXED.md
+*_STATUS.md
+*_PLAN.md
+*_SUMMARY.md
+*_EVALUATION.md
+OPTIMIZATION_*.md
+PERFORMANCE_*.md
+PHASE_*.md
+FIRESTORE_*.md
+INDEX_*.md
+PANTRY_*.md

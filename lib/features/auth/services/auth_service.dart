@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:super_swipe/core/services/firestore_service.dart';
+import 'package:super_swipe/core/services/user_service.dart';
 
 /// Result wrapper for authentication operations
 class AuthResult {
@@ -19,16 +20,11 @@ class AuthResult {
 /// Service class that handles all Firebase Authentication operations
 class AuthService {
   final FirebaseAuth _firebaseAuth;
-  final FirebaseFirestore _firestore;
   final GoogleSignIn _googleSignIn;
 
-  AuthService({
-    FirebaseAuth? firebaseAuth,
-    FirebaseFirestore? firestore,
-    GoogleSignIn? googleSignIn,
-  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-       _firestore = firestore ?? FirebaseFirestore.instance,
-       _googleSignIn = googleSignIn ?? GoogleSignIn();
+  AuthService({FirebaseAuth? firebaseAuth, GoogleSignIn? googleSignIn})
+    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+      _googleSignIn = googleSignIn ?? GoogleSignIn();
 
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
   Stream<User?> get userChanges => _firebaseAuth.userChanges();
@@ -74,11 +70,10 @@ class AuthService {
         await credential.user!.reload();
         final updatedUser = _firebaseAuth.currentUser;
 
-        await _createUserProfile(
-          uid: updatedUser!.uid,
-          email: email.trim(),
-          displayName: displayName.trim(),
-        );
+        // Create Firestore user profile
+        final userService = UserService(FirestoreService());
+        await userService.createUserProfile(updatedUser!);
+
         return AuthResult.success(updatedUser);
       }
       return AuthResult.failure('Account creation failed. Please try again.');
@@ -110,18 +105,10 @@ class AuthService {
       final user = userCredential.user;
 
       if (user != null) {
-        // Check if user exists in Firestore, if not create profile
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        if (!userDoc.exists) {
-          await _createUserProfile(
-            uid: user.uid,
-            email: user.email ?? '',
-            displayName: user.displayName ?? 'User',
-          );
-        }
+        // Create or update Firestore user profile
+        final userService = UserService(FirestoreService());
+        await userService.createUserProfile(user);
+
         return AuthResult.success(user);
       }
 
@@ -140,6 +127,10 @@ class AuthService {
     try {
       final userCredential = await _firebaseAuth.signInAnonymously();
       if (userCredential.user != null) {
+        // Create Firestore user profile for anonymous user
+        final userService = UserService(FirestoreService());
+        await userService.createUserProfile(userCredential.user!);
+
         return AuthResult.success(userCredential.user!);
       }
       return AuthResult.failure('Anonymous sign in failed.');
@@ -169,50 +160,6 @@ class AuthService {
         'An unexpected error occurred. Please try again.',
       );
     }
-  }
-
-  /// Create user profile document in Firestore
-  Future<void> _createUserProfile({
-    required String uid,
-    required String email,
-    required String displayName,
-  }) async {
-    final userDoc = _firestore.collection('users').doc(uid);
-    await userDoc.set({
-      'uid': uid,
-      'email': email,
-      'displayName': displayName,
-      'dietary_preferences': <String>[],
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'profileCompleted': false,
-      'avatarUrl': null,
-    });
-  }
-
-  /// Update user profile in Firestore
-  Future<void> updateUserProfile({
-    required String uid,
-    String? displayName,
-    List<String>? dietaryPreferences,
-    String? avatarUrl,
-  }) async {
-    final userDoc = _firestore.collection('users').doc(uid);
-    final updateData = <String, dynamic>{
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    if (displayName != null) updateData['displayName'] = displayName;
-    if (dietaryPreferences != null) {
-      updateData['dietary_preferences'] = dietaryPreferences;
-    }
-    if (avatarUrl != null) updateData['avatarUrl'] = avatarUrl;
-    await userDoc.update(updateData);
-  }
-
-  /// Get user profile from Firestore
-  Future<Map<String, dynamic>?> getUserProfile(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    return doc.data();
   }
 
   /// Map Firebase Auth error codes to user-friendly messages
