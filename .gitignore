@@ -110,6 +110,7 @@ coverage/
 
 # VSCode
 .vscode/
+.pdf
 
 # Firebase
 .firebase/
