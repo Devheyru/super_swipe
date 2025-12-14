@@ -191,23 +191,8 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: List.generate(maxCarrots, (index) {
-                      final isActive = index < carrotCount;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 300),
-                          opacity: isActive ? 1.0 : 0.2,
-                          child: const Text(
-                            '🥕',
-                            style: TextStyle(fontSize: 26),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
+                  // Fix #10: Cap carrot display to prevent overflow with premium users
+                  _buildCarrotDisplay(carrotCount, maxCarrots),
                   const SizedBox(height: 12),
                   Text(
                     '$carrotCount of $maxCarrots unlocks remaining this week',
@@ -317,6 +302,64 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+      ],
+    );
+  }
+
+  /// Fix #10: Build carrot display with cap for premium users
+  Widget _buildCarrotDisplay(int current, int max) {
+    // Cap at 20 to prevent overflow on premium
+    if (max > 20) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.orange.withOpacity(0.1),
+              Colors.orange.withOpacity(0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🥕', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Text(
+              '$current / $max',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal display for <= 20 carrots
+    final displayMax = max.clamp(0, 20);
+    return Row(
+      children: [
+        ...List.generate(
+          current.clamp(0, displayMax),
+          (_) => const Padding(
+            padding: EdgeInsets.only(right: 8),
+            child: Text('🥕', style: TextStyle(fontSize: 26)),
+          ),
+        ),
+        ...List.generate(
+          (displayMax - current).clamp(0, displayMax),
+          (_) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              '🥕',
+              style: TextStyle(fontSize: 26, color: Colors.grey, shadows: []),
+            ),
+          ),
+        ),
       ],
     );
   }

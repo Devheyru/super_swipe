@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:super_swipe/core/models/user_profile.dart';
+import 'package:super_swipe/core/models/recipe.dart';
 import 'package:super_swipe/core/services/firestore_service.dart';
 
 /// Service for user profile management in Firestore
@@ -86,27 +87,84 @@ class UserService {
   }
 
   /// Spend carrots (with transaction to prevent race conditions)
+  /// Fix #3 & #9: Enhanced with validation and proper DI
   Future<bool> spendCarrots(String userId, int amount) async {
+    if (amount <= 0) {
+      throw ArgumentError('Amount must be positive');
+    }
+
     final userRef = _firestoreService.users.doc(userId);
 
-    return await FirebaseFirestore.instance.runTransaction((transaction) async {
+    return await _firestoreService.instance.runTransaction((transaction) async {
       final snapshot = await transaction.get(userRef);
-      if (!snapshot.exists) return false;
+
+      if (!snapshot.exists) {
+        throw StateError('User not found: $userId');
+      }
 
       final data = snapshot.data() as Map<String, dynamic>?;
-      final currentCarrots =
-          (data?['carrots'] as Map<String, dynamic>?)?['current'] as int? ?? 0;
-
-      if (currentCarrots >= amount) {
-        transaction.update(userRef, {
-          'carrots.current': currentCarrots - amount,
-          'stats.totalCarrotsSpent': FieldValue.increment(amount),
-          'stats.recipesUnlocked': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        return true;
+      if (data == null) {
+        throw StateError('User data is null for: $userId');
       }
-      return false;
+
+      final carrots = (data['carrots'] as Map<String, dynamic>?) ?? {};
+      final currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
+
+      if (currentCarrots < amount) {
+        return false; // Insufficient carrots
+      }
+
+      transaction.update(userRef, {
+        'carrots.current': currentCarrots - amount,
+        'stats.totalCarrotsSpent': FieldValue.increment(amount),
+        'stats.recipesUnlocked': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      return true;
+    });
+  }
+
+  /// Atomically unlock and save recipe
+  /// Fix #15: Prevents race condition where carrots are spent but recipe not saved
+  Future<bool> unlockRecipe(String userId, Recipe recipe) async {
+    final userRef = _firestoreService.users.doc(userId);
+    final recipeRef = _firestoreService.userSavedRecipes(userId).doc(recipe.id);
+
+    return await _firestoreService.instance.runTransaction((transaction) async {
+      final userSnapshot = await transaction.get(userRef);
+
+      if (!userSnapshot.exists) throw StateError('User not found');
+
+      final data = userSnapshot.data() as Map<String, dynamic>?;
+      final carrots = (data?['carrots'] as Map<String, dynamic>?) ?? {};
+      final currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
+
+      if (currentCarrots < 1) return false;
+
+      // Deduct carrot
+      transaction.update(userRef, {
+        'carrots.current': currentCarrots - 1,
+        'stats.totalCarrotsSpent': FieldValue.increment(1),
+        'stats.recipesUnlocked': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Save recipe
+      transaction.set(recipeRef, {
+        'recipeId': recipe.id,
+        'title': recipe.title,
+        'imageUrl': recipe.imageUrl,
+        'cookTime': recipe.cookTime ?? '${recipe.timeMinutes} min',
+        'servings': recipe.servings ?? '${recipe.timeMinutes ~/ 20} servings',
+        'difficulty': recipe.difficulty ?? 'Medium',
+        'calories': recipe.calories,
+        // Fix #8: Include lowercase title for search
+        'titleLowercase': recipe.title.toLowerCase(),
+        'savedAt': FieldValue.serverTimestamp(),
+      });
+
+      return true;
     });
   }
 

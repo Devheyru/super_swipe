@@ -41,12 +41,12 @@ class PantryService {
     String source = 'manual',
     double? detectionConfidence,
   }) async {
-    final id =
-        'item_${name.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+    // Let Firestore generate safe IDs (Fix #1)
+    final docRef = _firestoreService.userPantry(userId).doc();
     final now = DateTime.now();
 
     final item = PantryItem(
-      id: id,
+      id: docRef.id, // Use Firestore's auto-generated safe ID
       userId: userId,
       name: name,
       normalizedName: name.toLowerCase().trim(),
@@ -60,7 +60,7 @@ class PantryService {
       updatedAt: now,
     );
 
-    await _firestoreService.userPantry(userId).doc(id).set(item.toFirestore());
+    await docRef.set(item.toFirestore());
   }
 
   /// Batch add pantry items (for scanning)
@@ -71,13 +71,16 @@ class PantryService {
     final batch = FirebaseFirestore.instance.batch();
     final now = DateTime.now();
 
-    for (var itemData in items) {
+    // Fix #5: Use indexed loop instead of indexOf (O(n) instead of O(n²))
+    for (var i = 0; i < items.length; i++) {
+      final itemData = items[i];
       final name = itemData['name'] as String;
-      final id =
-          'item_${name.toLowerCase().replaceAll(' ', '_')}_${now.millisecondsSinceEpoch}_${items.indexOf(itemData)}';
+
+      // Fix #1: Let Firestore generate safe IDs
+      final docRef = _firestoreService.userPantry(userId).doc();
 
       final item = PantryItem(
-        id: id,
+        id: docRef.id, // Use Firestore's auto-generated safe ID
         userId: userId,
         name: name,
         normalizedName: name.toLowerCase().trim(),
@@ -91,7 +94,6 @@ class PantryService {
         updatedAt: now,
       );
 
-      final docRef = _firestoreService.userPantry(userId).doc(id);
       batch.set(docRef, item.toFirestore());
     }
 
@@ -129,14 +131,22 @@ class PantryService {
 
   /// Clear all pantry items
   Future<void> clearPantry(String userId) async {
+    // Fix #4: Handle batch limit of 500 documents
+    const batchSize = 500;
     final snapshot = await _firestoreService.userPantry(userId).get();
-    final batch = FirebaseFirestore.instance.batch();
 
-    for (var doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    for (var i = 0; i < snapshot.docs.length; i += batchSize) {
+      final batch = FirebaseFirestore.instance.batch();
+      final end = (i + batchSize < snapshot.docs.length)
+          ? i + batchSize
+          : snapshot.docs.length;
+
+      for (var j = i; j < end; j++) {
+        batch.delete(snapshot.docs[j].reference);
+      }
+
+      await batch.commit();
     }
-
-    await batch.commit();
   }
 
   /// Search pantry items by name
