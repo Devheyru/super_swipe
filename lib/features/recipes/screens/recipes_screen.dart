@@ -1,98 +1,36 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:super_swipe/core/models/recipe.dart';
+import 'package:super_swipe/core/providers/recipe_providers.dart';
+import 'package:super_swipe/core/services/optimized_image_service.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
+import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 
-class RecipesScreen extends StatefulWidget {
+/// RecipesScreen - Displays user's saved recipes from Firestore
+///
+/// Now using real database data instead of hardcoded recipes
+class RecipesScreen extends ConsumerStatefulWidget {
   const RecipesScreen({super.key});
 
   @override
-  State<RecipesScreen> createState() => _RecipesScreenState();
+  ConsumerState<RecipesScreen> createState() => _RecipesScreenState();
 }
 
-class _RecipesScreenState extends State<RecipesScreen> {
-  int _selectedEnergyLevel = 2; // Default to 'Okay'
-
-  // Mock Recipes
-  final List<Recipe> _recipes = [
-    Recipe(
-      id: '1',
-      title: 'Creamy Mushroom Pasta',
-      imageUrl: 'assets/images/pasta.jpg', // Placeholder
-      description:
-          'A rich and creamy pasta dish with fresh mushrooms and herbs.',
-      ingredients: ['Pasta', 'Mushrooms', 'Cream', 'Garlic', 'Parsley'],
-      energyLevel: 2,
-      timeMinutes: 25,
-      calories: 520,
-      equipment: ['Stovetop', 'Pot'],
-    ),
-    Recipe(
-      id: '2',
-      title: 'Avocado Toast',
-      imageUrl: 'assets/images/toast.jpg',
-      description: 'Simple, healthy, and delicious avocado toast.',
-      ingredients: ['Bread', 'Avocado', 'Salt', 'Pepper', 'Lemon'],
-      energyLevel: 1,
-      timeMinutes: 8,
-      calories: 320,
-      equipment: ['Toaster', 'Knife'],
-    ),
-    Recipe(
-      id: '3',
-      title: 'Spicy Chicken Curry',
-      imageUrl: 'assets/images/curry.jpg',
-      description: 'Warming chicken curry with aromatic spices.',
-      ingredients: ['Chicken', 'Curry Paste', 'Coconut Milk', 'Rice'],
-      energyLevel: 3,
-      timeMinutes: 40,
-      calories: 640,
-      equipment: ['Stovetop', 'Pan'],
-    ),
-    Recipe(
-      id: '4',
-      title: 'Greek Salad',
-      imageUrl: 'assets/images/salad.jpg',
-      description: 'Fresh and crisp greek salad with feta cheese.',
-      ingredients: ['Cucumber', 'Tomato', 'Feta', 'Olives', 'Oregano'],
-      energyLevel: 0,
-      timeMinutes: 12,
-      calories: 260,
-      equipment: ['Bowl', 'Knife'],
-    ),
-    Recipe(
-      id: '5',
-      title: 'Berry Smoothie',
-      imageUrl: 'assets/images/smoothie.jpg',
-      description: 'Refreshing mixed berry smoothie.',
-      ingredients: ['Mixed Berries', 'Yogurt', 'Honey', 'Milk'],
-      energyLevel: 1,
-      timeMinutes: 6,
-      calories: 220,
-      equipment: ['Blender'],
-    ),
-    Recipe(
-      id: '6',
-      title: 'One-Pan Veggie Stir Fry',
-      imageUrl: 'assets/images/stirfry.jpg',
-      description: 'Colorful veggies tossed in a tangy sauce.',
-      ingredients: ['Broccoli', 'Peppers', 'Soy Sauce', 'Noodles'],
-      energyLevel: 2,
-      timeMinutes: 18,
-      calories: 410,
-      equipment: ['Stovetop', 'Pan'],
-    ),
-  ];
+class _RecipesScreenState extends ConsumerState<RecipesScreen> {
+  int _selectedFilter = 0; // 0: All, 1: Recent, 2: Favorites
 
   @override
   Widget build(BuildContext context) {
+    final savedRecipesAsync = ref.watch(savedRecipesProvider);
+    final userId = ref.watch(authProvider).user?.uid;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // 1. Header
+            // Header
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(AppTheme.spacingL),
@@ -103,21 +41,15 @@ class _RecipesScreenState extends State<RecipesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ready to Cook?',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: AppTheme.textSecondary,
-                                  ),
+                          'My Recipes',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: AppTheme.textSecondary),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Discover Recipes',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                          'Saved Collection',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ],
                     ),
@@ -127,8 +59,10 @@ class _RecipesScreenState extends State<RecipesScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.tune_rounded),
-                        onPressed: () {},
+                        icon: const Icon(Icons.search_rounded),
+                        onPressed: () {
+                          // TODO: Implement search
+                        },
                       ),
                     ),
                   ],
@@ -136,136 +70,136 @@ class _RecipesScreenState extends State<RecipesScreen> {
               ),
             ),
 
-            // 2. Energy Level Slider
+            // Filter Chips
             SliverToBoxAdapter(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppTheme.spacingL),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'How much energy do you have?',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacingL,
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildFilterChip('All', 0),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('Recent', 1),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('Favorites', 2),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
-                    // Custom Slider
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: AppTheme.softShadow,
+            const SliverToBoxAdapter(
+              child: SizedBox(height: AppTheme.spacingL),
+            ),
+
+            // Recipes List
+            savedRecipesAsync.when(
+              loading: () => const SliverFillRemaining(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppTheme.primaryColor,
+                    ),
+                  ),
+                ),
+              ),
+              error: (error, stack) => SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        size: 64,
+                        color: Colors.red[300],
                       ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading recipes',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        error.toString(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              data: (recipes) {
+                if (recipes.isEmpty) {
+                  return SliverFillRemaining(
+                    child: Center(
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 8,
-                              activeTrackColor: AppTheme.primaryColor,
-                              inactiveTrackColor: Colors.grey.shade200,
-                              thumbColor: AppTheme.primaryColor,
-                              overlayColor:
-                                  AppTheme.primaryColor.withValues(alpha: 0.1),
-                              thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 12, elevation: 4),
-                              overlayShape: const RoundSliderOverlayShape(
-                                  overlayRadius: 24),
-                              tickMarkShape: const RoundSliderTickMarkShape(
-                                  tickMarkRadius: 0),
-                            ),
-                            child: Slider(
-                              value: _selectedEnergyLevel.toDouble(),
-                              min: 0,
-                              max: 3,
-                              divisions: 3,
-                              onChanged: (value) {
-                                setState(
-                                    () => _selectedEnergyLevel = value.round());
-                              },
+                          Icon(
+                            Icons.restaurant_menu_rounded,
+                            size: 80,
+                            color: Colors.grey[300],
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'No Saved Recipes Yet',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 48),
+                            child: Text(
+                              'Start swiping to unlock and save delicious recipes!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
                             ),
                           ),
-
-                          // Labels
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildSliderLabel('Sleepy', '💤', 0),
-                                _buildSliderLabel('Low', '🔋', 1),
-                                _buildSliderLabel('Okay', '⚡', 2),
-                                _buildSliderLabel('High', '🔥', 3),
-                              ],
+                          const SizedBox(height: 32),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              // Navigate to swipe screen
+                              // You can add navigation here if needed
+                            },
+                            icon: const Icon(Icons.swipe_rounded),
+                            label: const Text('Start Swiping'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  );
+                }
 
-            const SliverToBoxAdapter(
-                child: SizedBox(height: AppTheme.spacingL)),
-
-            // 3. Cravings
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 100,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppTheme.spacingL),
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    _buildCravingItem('Sweet', '🍩', Colors.pink.shade50),
-                    _buildCravingItem('Salty', '🥨', Colors.orange.shade50),
-                    _buildCravingItem('Fresh', '🥗', Colors.green.shade50),
-                    _buildCravingItem('Comfort', '🍜', Colors.brown.shade50),
-                    _buildCravingItem('Spicy', '🌶️', Colors.red.shade50),
-                  ],
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(
-                child: SizedBox(height: AppTheme.spacingL)),
-
-            // 4. Section Title
-            SliverToBoxAdapter(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppTheme.spacingL),
-                child: Text(
-                  'Based on your pantry',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(
-                child: SizedBox(height: AppTheme.spacingM)),
-
-            // 5. Recipe List
-            SliverPadding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppTheme.spacingL),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildRecipeCard(context, index),
-                  childCount: _recipes.length,
-                ),
-              ),
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingL,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          _buildRecipeCard(context, recipes[index], userId),
+                      childCount: recipes.length,
+                    ),
+                  ),
+                );
+              },
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -275,51 +209,31 @@ class _RecipesScreenState extends State<RecipesScreen> {
     );
   }
 
-  Widget _buildSliderLabel(String label, String emoji, int index) {
-    final isSelected = _selectedEnergyLevel == index;
-    return Column(
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
+  Widget _buildFilterChip(String label, int index) {
+    final isSelected = _selectedFilter == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilter = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildCravingItem(String label, String emoji, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 28))),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppTheme.textPrimary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildRecipeCard(BuildContext context, int index) {
-    final recipe = _recipes[index];
+  Widget _buildRecipeCard(BuildContext context, Recipe recipe, String? userId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
@@ -336,65 +250,60 @@ class _RecipesScreenState extends State<RecipesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image Placeholder
-          Container(
-            height: 180,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(24)),
-                  child: recipe.imageUrl.startsWith('http')
-                      ? CachedNetworkImage(
-                          imageUrl: recipe.imageUrl,
-                          fit: BoxFit.cover,
-                          memCacheHeight: 400,
-                          placeholder: (context, url) =>
-                              const Center(child: CircularProgressIndicator()),
-                          errorWidget: (context, url, error) => const Icon(
-                              Icons.broken_image,
-                              size: 48,
-                              color: Colors.grey),
-                        )
-                      : Image.asset(
-                          recipe.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Center(
-                            child: Icon(Icons.image_not_supported_rounded,
-                                size: 48, color: Colors.grey),
-                          ),
-                        ),
+          // Image
+          Stack(
+            children: [
+              RecipeImage(
+                imageUrl: recipe.imageUrl,
+                height: 180,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8),
-                      ],
+              ),
+              // Unsave button
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.favorite_rounded,
+                      color: AppTheme.errorColor,
+                      size: 20,
                     ),
-                    child: const Icon(Icons.favorite_border_rounded,
-                        size: 20, color: AppTheme.errorColor),
+                    onPressed: () async {
+                      if (userId != null) {
+                        // Unsave recipe
+                        await ref
+                            .read(recipeServiceProvider)
+                            .unsaveRecipe(userId, recipe.id);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Recipe removed from saved'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
 
+          // Content
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -404,47 +313,67 @@ class _RecipesScreenState extends State<RecipesScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.secondaryLight,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        _getEnergyLabel(recipe.energyLevel),
+                        recipe.difficulty ?? 'Medium',
                         style: const TextStyle(
-                            color: AppTheme.secondaryDark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold),
+                          color: AppTheme.secondaryDark,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const Spacer(),
-                    const Icon(Icons.star_rounded,
-                        size: 16, color: Colors.amber),
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 16,
+                      color: Colors.amber,
+                    ),
                     const SizedBox(width: 4),
-                    const Text('4.8',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      '4.8',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
                   recipe.title,
                   style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.access_time_rounded,
-                        size: 16, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 16,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${recipe.timeMinutes} min',
-                        style: TextStyle(color: Colors.grey.shade500)),
+                    Text(
+                      recipe.cookTime ?? '${recipe.timeMinutes} min',
+                      style: TextStyle(color: Colors.grey.shade500),
+                    ),
                     const SizedBox(width: 16),
-                    Icon(Icons.local_fire_department_rounded,
-                        size: 16, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 16,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${recipe.calories} kcal',
-                        style: TextStyle(color: Colors.grey.shade500)),
+                    Text(
+                      '${recipe.calories} kcal',
+                      style: TextStyle(color: Colors.grey.shade500),
+                    ),
                   ],
                 ),
               ],
@@ -453,20 +382,5 @@ class _RecipesScreenState extends State<RecipesScreen> {
         ],
       ),
     );
-  }
-
-  String _getEnergyLabel(int level) {
-    switch (level) {
-      case 0:
-        return 'Sleepy';
-      case 1:
-        return 'Low';
-      case 2:
-        return 'Okay';
-      case 3:
-        return 'High';
-      default:
-        return 'Okay';
-    }
   }
 }

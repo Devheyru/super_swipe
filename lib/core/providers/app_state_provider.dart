@@ -80,7 +80,8 @@ class AppStateNotifier extends Notifier<AppState> {
     return AppState(
       carrotCount: 5,
       unlockedRecipes: const [],
-      pantryItems: _initialPantry(),
+      pantryItems:
+          const [], // Pantry items loaded from Firestore via pantryItemsProvider
       isGuest: isGuest,
       hasSeenWelcome: false,
       filterExpanded: true,
@@ -184,42 +185,10 @@ class AppStateNotifier extends Notifier<AppState> {
     _persistCarrotCount(5);
   }
 
-  // Pantry CRUD
-  void addPantryItem(String name, int quantity) {
-    final newItem = PantryItem(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name,
-      quantity: quantity,
-    );
-    state = state.copyWith(pantryItems: [...state.pantryItems, newItem]);
-  }
-
-  void editPantryItem(String id, String name, int quantity) {
-    final updated = state.pantryItems.map((item) {
-      if (item.id == id) {
-        return item.copyWith(name: name, quantity: quantity);
-      }
-      return item;
-    }).toList();
-    state = state.copyWith(pantryItems: updated);
-  }
-
-  void deletePantryItem(String id) {
-    final updated = state.pantryItems.where((item) => item.id != id).toList();
-    state = state.copyWith(pantryItems: updated);
-  }
-
-  List<PantryItem> _initialPantry() {
-    return const [
-      PantryItem(id: 'p1', name: 'Fresh Milk', quantity: 1),
-      PantryItem(id: 'p2', name: 'Cheddar Cheese', quantity: 2),
-      PantryItem(id: 'p3', name: 'Tomatoes', quantity: 4),
-      PantryItem(id: 'p4', name: 'Spinach', quantity: 2),
-      PantryItem(id: 'p5', name: 'Eggs', quantity: 12),
-      PantryItem(id: 'p6', name: 'Chicken Breast', quantity: 3),
-    ];
-  }
+  // Note: Pantry CRUD operations have been moved to PantryService
+  // Use pantryServiceProvider in your UI instead
 }
 
-final appStateProvider =
-    NotifierProvider<AppStateNotifier, AppState>(AppStateNotifier.new);
+final appStateProvider = NotifierProvider<AppStateNotifier, AppState>(
+  AppStateNotifier.new,
+);
