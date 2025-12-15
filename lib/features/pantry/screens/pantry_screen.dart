@@ -63,7 +63,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
       backgroundColor: AppTheme.backgroundColor,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          if (_requireAuth()) return;
+          if (_requireAuth() || _isGuest()) return;
           _showAddEditDialog();
         },
         icon: const Icon(Icons.add_rounded),
@@ -170,7 +170,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
 
                     /// Fix #11: Proper error handling to prevent UI/Firestore desync
                     confirmDismiss: (_) async {
-                      if (_requireAuth()) return false;
+                      if (_requireAuth() || _isGuest()) return false;
 
                       final authState = ref.read(authProvider);
                       if (authState.user == null) return false;
@@ -208,7 +208,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                     ),
                     child: InkWell(
                       onTap: () {
-                        if (_requireAuth()) return;
+                        if (_requireAuth() || _isGuest()) return;
                         _showAddEditDialog(
                           itemId: item.id,
                           initialName: item.name,
@@ -356,13 +356,14 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
             onPressed: _isSubmitting
                 ? null
                 : () async {
-                    if (_isSubmitting)
-                      return; // Fix #14: Prevent double-submission
+                    if (_isSubmitting) {
+                      return;
+                    } // Fix #14: Prevent double-submission
 
                     final name = nameController.text.trim();
                     final qty = int.tryParse(qtyController.text.trim()) ?? 1;
                     if (name.isEmpty) return;
-                    if (_requireAuth()) return;
+                    if (_requireAuth() || _isGuest()) return;
 
                     final authState = ref.read(authProvider);
                     if (authState.user == null) return;
@@ -423,7 +424,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
 
   bool _requireAuth() {
     final authState = ref.read(authProvider);
-    if (authState.user == null || authState.user!.isAnonymous) {
+    if (authState.user == null) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -440,6 +441,44 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                 GoRouter.of(context).go(AppRoutes.login);
               },
               child: const Text('Login'),
+            ),
+          ],
+        ),
+      );
+      return true;
+    }
+    return false;
+  }
+
+  bool _isGuest() {
+    final authState = ref.read(authProvider);
+    if (authState.user?.isAnonymous == true) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Guest Mode Restriction'),
+          content: const Text(
+            'Guest users can view the pantry but cannot save changes.\n\n'
+            'Create a free account to:\n'
+            '• Save your pantry inventory\n'
+            '• Get personalized recipe suggestions\n'
+            '• Track your cooking progress\n\n'
+            'Sign up now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                GoRouter.of(context).go(AppRoutes.signup);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+              ),
+              child: const Text('Sign Up'),
             ),
           ],
         ),

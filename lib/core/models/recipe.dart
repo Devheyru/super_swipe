@@ -52,6 +52,7 @@ class Recipe {
   /// Create Recipe from Firestore document
   factory Recipe.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
     return Recipe(
       id: doc.id,
       title: data['title'] ?? '',

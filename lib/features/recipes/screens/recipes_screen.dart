@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:super_swipe/core/models/recipe.dart';
 import 'package:super_swipe/core/providers/recipe_providers.dart';
-import 'package:super_swipe/core/services/optimized_image_service.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 
@@ -18,6 +18,7 @@ class RecipesScreen extends ConsumerStatefulWidget {
 
 class _RecipesScreenState extends ConsumerState<RecipesScreen> {
   int _selectedFilter = 0; // 0: All, 1: Recent, 2: Favorites
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -33,38 +34,82 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
             // Header
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingL),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                padding: const EdgeInsets.fromLTRB(
+                  AppTheme.spacingL,
+                  AppTheme.spacingXL,
+                  AppTheme.spacingL,
+                  AppTheme.spacingM,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Center(
+                      child: Text(
+                        'My Recipes',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 32,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingL),
+                    Row(
                       children: [
-                        Text(
-                          'My Recipes',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(color: AppTheme.textSecondary),
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceColor,
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: TextField(
+                              onChanged: (value) =>
+                                  setState(() => _searchQuery = value),
+                              decoration: InputDecoration(
+                                hintText: 'Search recipes...',
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: const EdgeInsets.only(
+                                  left: 26,
+                                  right: 20,
+                                ),
+                                hintStyle: TextStyle(
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Saved Collection',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                        const SizedBox(width: AppTheme.spacingM),
+                        Container(
+                          height: 48,
+                          width: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.search_rounded,
+                              color: AppTheme.textPrimary,
+                            ),
+                            onPressed: () {},
+                          ),
                         ),
                       ],
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.search_rounded),
-                        onPressed: () {
-                          // TODO: Implement search
-                        },
-                      ),
-                    ),
+                    const SizedBox(height: AppTheme.spacingM),
                   ],
                 ),
               ),
@@ -132,8 +177,20 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                 ),
               ),
               data: (recipes) {
-                // Fix #13: Apply functional filtering
-                final filteredRecipes = _filterRecipes(recipes);
+                // Fix #13: Apply functional filtering + search
+                final filteredRecipes = _filterRecipes(recipes)
+                    .where(
+                      (recipe) =>
+                          recipe.title.toLowerCase().contains(
+                            _searchQuery.toLowerCase(),
+                          ) ||
+                          recipe.ingredients.any(
+                            (ingredient) => ingredient.toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            ),
+                          ),
+                    )
+                    .toList();
 
                 if (filteredRecipes.isEmpty) {
                   return SliverFillRemaining(
@@ -142,15 +199,19 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.restaurant_menu_rounded,
+                            _searchQuery.isNotEmpty
+                                ? Icons.search_off_rounded
+                                : Icons.restaurant_menu_rounded,
                             size: 80,
                             color: Colors.grey[300],
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            _selectedFilter == 0
-                                ? 'No Saved Recipes Yet'
-                                : 'No Recipes Match Filter',
+                            _searchQuery.isNotEmpty
+                                ? 'No Recipes Found'
+                                : (_selectedFilter == 0
+                                      ? 'No Saved Recipes Yet'
+                                      : 'No Recipes Match Filter'),
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -158,9 +219,11 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 48),
                             child: Text(
-                              _selectedFilter == 0
-                                  ? 'Start swiping to unlock and save delicious recipes!'
-                                  : 'Try selecting a different filter',
+                              _searchQuery.isNotEmpty
+                                  ? 'Try a different search term'
+                                  : (_selectedFilter == 0
+                                        ? 'Start swiping to unlock and save delicious recipes!'
+                                        : 'Try selecting a different filter'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.grey[600],
@@ -169,7 +232,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                             ),
                           ),
                           const SizedBox(height: 32),
-                          if (_selectedFilter == 0)
+                          if (_selectedFilter == 0 && _searchQuery.isEmpty)
                             ElevatedButton.icon(
                               onPressed: () {
                                 // Navigate to swipe screen
@@ -278,11 +341,46 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
           // Image
           Stack(
             children: [
-              RecipeImage(
-                imageUrl: recipe.imageUrl,
-                height: 180,
+              ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(24),
+                ),
+                child: SizedBox(
+                  height: 180,
+                  width: double.infinity,
+                  child: recipe.imageUrl.startsWith('http')
+                      ? CachedNetworkImage(
+                          imageUrl: recipe.imageUrl,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 800,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(
+                              Icons.broken_image,
+                              size: 48,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        )
+                      : Image.asset(
+                          recipe.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(
+                                  Icons.broken_image,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                        ),
                 ),
               ),
               // Unsave button
