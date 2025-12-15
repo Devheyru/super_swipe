@@ -467,12 +467,21 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// Fix #12: Safe initials extraction with edge case handling
   String _getInitials(String name) {
-    if (name.isEmpty) return 'U';
-    final parts = name.split(' ');
-    if (parts.length > 1) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    // Trim and split by any whitespace, filter empty parts
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return '?';
+
+    if (parts.length == 1) {
+      return parts[0].isEmpty ? '?' : parts[0][0].toUpperCase();
     }
-    return name[0].toUpperCase();
+
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

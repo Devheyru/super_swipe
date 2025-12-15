@@ -18,6 +18,8 @@ class Recipe {
   final String cuisine;
   final String timeTier; // 'under_30_min', etc.
   final RecipeStats stats;
+  // Fix #8: Case-insensitivity
+  final String titleLowercase;
 
   // Additional UI fields
   final String? cookTime;
@@ -40,14 +42,17 @@ class Recipe {
     this.cuisine = 'other',
     this.timeTier = 'medium',
     this.stats = const RecipeStats(),
+    // Fix #8: Auto-generate if not provided
+    String? titleLowercase,
     this.cookTime,
     this.servings,
     this.difficulty,
-  });
+  }) : titleLowercase = titleLowercase ?? title.toLowerCase();
 
   /// Create Recipe from Firestore document
   factory Recipe.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
     return Recipe(
       id: doc.id,
       title: data['title'] ?? '',
@@ -66,6 +71,8 @@ class Recipe {
       stats: data['stats'] != null
           ? RecipeStats.fromMap(data['stats'])
           : const RecipeStats(),
+      // Fix #8: Parse lowercase title
+      titleLowercase: data['titleLowercase'],
       cookTime: data['cookTime'],
       servings: data['servings'],
       difficulty: data['difficulty'],
@@ -89,6 +96,8 @@ class Recipe {
       'cuisine': cuisine,
       'timeTier': timeTier,
       'stats': stats.toMap(),
+      // Fix #8: Persist lowercase title
+      'titleLowercase': titleLowercase,
       if (cookTime != null) 'cookTime': cookTime,
       if (servings != null) 'servings': servings,
       if (difficulty != null) 'difficulty': difficulty,
@@ -132,6 +141,8 @@ extension RecipeExtension on Recipe {
       'cuisine': cuisine,
       'timeTier': timeTier,
       'stats': stats.toMap(),
+      // Fix #8: Include in map export
+      'titleLowercase': titleLowercase,
       if (cookTime != null) 'cookTime': cookTime,
       if (servings != null) 'servings': servings,
       if (difficulty != null) 'difficulty': difficulty,

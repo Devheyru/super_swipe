@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:super_swipe/core/providers/user_data_providers.dart';
+import 'package:super_swipe/core/providers/recipe_providers.dart';
 import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
@@ -15,6 +17,7 @@ class HomeScreen extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final userProfileAsync = ref.watch(userProfileProvider);
     final pantryCount = ref.watch(pantryCountProvider);
+    final savedRecipesAsync = ref.watch(savedRecipesProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBF5), // Warm cream background
@@ -114,7 +117,23 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
+
+                  // 2.5 Continue Recipe Section (if available)
+                  savedRecipesAsync.when(
+                    data: (recipes) {
+                      if (recipes.isEmpty) return const SizedBox.shrink();
+                      final latestRecipe = recipes.first;
+                      return Column(
+                        children: [
+                          _buildContinueRecipeCard(context, latestRecipe),
+                          const SizedBox(height: 32),
+                        ],
+                      );
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
 
                   // 3. Pantry Summary Card (Real-time data)
                   Container(
@@ -191,23 +210,8 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: List.generate(maxCarrots, (index) {
-                      final isActive = index < carrotCount;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 300),
-                          opacity: isActive ? 1.0 : 0.2,
-                          child: const Text(
-                            '🥕',
-                            style: TextStyle(fontSize: 26),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
+                  // Fix #10: Cap carrot display to prevent overflow with premium users
+                  _buildCarrotDisplay(carrotCount, maxCarrots),
                   const SizedBox(height: 12),
                   Text(
                     '$carrotCount of $maxCarrots unlocks remaining this week',
@@ -302,7 +306,7 @@ class HomeScreen extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color, size: 24),
@@ -318,6 +322,56 @@ class HomeScreen extends ConsumerWidget {
         ),
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
+    );
+  }
+
+  /// Fix #10: Build carrot display with cap for premium users
+  Widget _buildCarrotDisplay(int current, int max) {
+    // Cap at 20 to prevent overflow on premium
+    if (max > 20) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.orange.withValues(alpha: 0.1),
+              Colors.orange.withValues(alpha: 0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🥕', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Text(
+              '$current / $max',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal display for <= 20 carrots
+    final displayMax = max.clamp(0, 20);
+    return Row(
+      children: List.generate(displayMax, (index) {
+        final isActive = index < current;
+        return Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: isActive ? 1.0 : 0.25,
+            child: const Text('🥕', style: TextStyle(fontSize: 26)),
+          ),
+        );
+      }),
     );
   }
 
@@ -373,6 +427,144 @@ class HomeScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildContinueRecipeCard(BuildContext context, recipe) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: SizedBox(
+              height: 160,
+              width: double.infinity,
+              child: recipe.imageUrl.startsWith('http')
+                  ? CachedNetworkImage(
+                      imageUrl: recipe.imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 800,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.broken_image,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  : Image.asset(
+                      recipe.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Icon(
+                          Icons.broken_image,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.restaurant_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Continue Recipe',
+                      style: GoogleFonts.dmSerifDisplay(
+                        fontSize: 18,
+                        color: const Color(0xFF2D2621),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  recipe.title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2D2621),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${recipe.timeMinutes} min',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(width: 16),
+                    Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${recipe.calories} kcal',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.go(AppRoutes.recipes),
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: const Text('View Recipe'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

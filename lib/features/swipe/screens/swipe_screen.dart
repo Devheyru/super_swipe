@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/models/recipe.dart';
 import 'package:super_swipe/core/providers/firestore_providers.dart';
 import 'package:super_swipe/core/providers/user_data_providers.dart';
-import 'package:super_swipe/core/providers/recipe_providers.dart';
+
 import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
@@ -28,12 +28,12 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     super.dispose();
   }
 
-  // Mock Recipes
+  // Mock Recipes with real Unsplash images
   final List<Recipe> _recipes = [
     Recipe(
       id: '1',
       title: 'Creamy Mushroom Pasta',
-      imageUrl: 'assets/images/pasta.jpg', // Placeholder
+      imageUrl: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800&q=80',
       description:
           'A rich and creamy pasta dish with fresh mushrooms and herbs.',
       ingredients: ['Pasta', 'Mushrooms', 'Cream', 'Garlic', 'Parsley'],
@@ -45,7 +45,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe(
       id: '2',
       title: 'Avocado Toast',
-      imageUrl: 'assets/images/toast.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1541519227354-08fa5d50c44d?w=800&q=80',
       description: 'Simple, healthy, and delicious avocado toast.',
       ingredients: ['Bread', 'Avocado', 'Salt', 'Pepper', 'Lemon'],
       energyLevel: 1,
@@ -56,7 +56,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe(
       id: '3',
       title: 'Spicy Chicken Curry',
-      imageUrl: 'assets/images/curry.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&q=80',
       description: 'Warming chicken curry with aromatic spices.',
       ingredients: ['Chicken', 'Curry Paste', 'Coconut Milk', 'Rice'],
       energyLevel: 3,
@@ -67,7 +67,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe(
       id: '4',
       title: 'Greek Salad',
-      imageUrl: 'assets/images/salad.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=800&q=80',
       description: 'Fresh and crisp greek salad with feta cheese.',
       ingredients: ['Cucumber', 'Tomato', 'Feta', 'Olives', 'Oregano'],
       energyLevel: 0,
@@ -78,7 +78,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe(
       id: '5',
       title: 'Berry Smoothie',
-      imageUrl: 'assets/images/smoothie.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=800&q=80',
       description: 'Refreshing mixed berry smoothie.',
       ingredients: ['Mixed Berries', 'Yogurt', 'Honey', 'Milk'],
       energyLevel: 1,
@@ -89,7 +89,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe(
       id: '6',
       title: 'One-Pan Veggie Stir Fry',
-      imageUrl: 'assets/images/stirfry.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=80',
       description: 'Colorful veggies tossed in a tangy sauce.',
       ingredients: ['Broccoli', 'Peppers', 'Soy Sauce', 'Noodles'],
       energyLevel: 2,
@@ -119,10 +119,12 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
   }
 
   Future<bool> _unlockRecipe(Recipe recipe) async {
-    final userId = ref.read(authProvider).user?.uid;
+    final authUser = ref.read(authProvider).user;
+    final userId = authUser?.uid;
 
-    if (userId == null) {
-      _showLoginPrompt();
+    // Block guests from unlocking - per requirements spec
+    if (userId == null || authUser?.isAnonymous == true) {
+      _showGuestRestrictedDialog();
       return false;
     }
 
@@ -133,21 +135,17 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     }
 
     try {
-      // Spend carrot in Firestore
+      // Fix #15: Use atomic transaction for unlocking
       final success = await ref
           .read(userServiceProvider)
-          .spendCarrots(userId, 1);
+          .unlockRecipe(userId, recipe);
 
       if (!success) {
         _showOutOfCarrots();
         return false;
       }
 
-      // Save recipe to Firestore
-      await ref.read(recipeServiceProvider).saveRecipe(userId, recipe);
-
-      // Update stats
-      await ref.read(userServiceProvider).incrementRecipesUnlocked(userId);
+      // Stats are now updated atomically in unlockRecipe
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,13 +171,18 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     await _promptUnlockFlow(recipe);
   }
 
-  void _showLoginPrompt() {
+  void _showGuestRestrictedDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Login Required'),
+        title: const Text('Create Account to Unlock'),
         content: const Text(
-          'Unlocking recipes requires login. Continue to login?',
+          'Guest users can browse recipes but cannot unlock instructions.\n\n'
+          'Create a free account to:\n'
+          '• Unlock 5 recipes per week\n'
+          '• Save your pantry\n'
+          '• Track your progress\n\n'
+          'Sign up now?',
         ),
         actions: [
           TextButton(
@@ -189,9 +192,12 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              GoRouter.of(context).go(AppRoutes.login);
+              GoRouter.of(context).go(AppRoutes.signup);
             },
-            child: const Text('Login'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+            ),
+            child: const Text('Sign Up'),
           ),
         ],
       ),
@@ -384,8 +390,9 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
                         icon: Icons.favorite_rounded,
                         color: AppTheme.primaryColor,
                         onPressed: () {
-                          if (ref.read(authProvider).user == null) {
-                            _showLoginPrompt();
+                          final authUser = ref.read(authProvider).user;
+                          if (authUser == null || authUser.isAnonymous) {
+                            _showGuestRestrictedDialog();
                             return;
                           }
                           if (canUnlock) {
@@ -740,10 +747,12 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
     Recipe recipe, {
     bool fromDirections = false,
   }) async {
-    final userId = ref.read(authProvider).user?.uid;
+    final authUser = ref.read(authProvider).user;
+    final userId = authUser?.uid;
 
-    if (userId == null) {
-      _showLoginPrompt();
+    // Block guests from unlocking - per requirements spec
+    if (userId == null || authUser?.isAnonymous == true) {
+      _showGuestRestrictedDialog();
       return;
     }
 

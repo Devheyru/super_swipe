@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/providers/firestore_providers.dart';
+import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
 
@@ -40,7 +41,13 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
 
   Future<void> _confirmItems() async {
     final authState = ref.read(authProvider);
-    if (authState.user == null) return;
+    final user = authState.user;
+    
+    // Block guests from saving scan results - per requirements spec
+    if (user == null || user.isAnonymous) {
+      _showGuestRestrictedDialog();
+      return;
+    }
 
     final pantryService = ref.read(pantryServiceProvider);
     final userService = ref.read(userServiceProvider);
@@ -88,6 +95,39 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
         );
       }
     }
+  }
+
+  void _showGuestRestrictedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Guest Mode Restriction'),
+        content: const Text(
+          'Guest users cannot save scanned items to pantry.\n\n'
+          'Create a free account to:\n'
+          '• Save scanned ingredients\n'
+          '• Build your pantry inventory\n'
+          '• Get personalized recipe suggestions\n\n'
+          'Sign up now?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.go(AppRoutes.signup);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+            ),
+            child: const Text('Sign Up'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Categorize ingredient based on name (simple categorization)

@@ -39,47 +39,47 @@ class DefaultFirebaseOptions {
   }
 
   static FirebaseOptions get web => FirebaseOptions(
-        apiKey: _env('FIREBASE_WEB_API_KEY'),
-        appId: _env('FIREBASE_WEB_APP_ID'),
-        messagingSenderId: _env('FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: _env('FIREBASE_PROJECT_ID'),
-        authDomain: _env('FIREBASE_AUTH_DOMAIN'),
-        storageBucket: _env('FIREBASE_STORAGE_BUCKET'),
-      );
+    apiKey: _env('WEB_API_KEY'),
+    appId: _env('WEB_APP_ID'),
+    messagingSenderId: _env('WEB_MESSAGING_SENDER_ID'),
+    projectId: _env('WEB_PROJECT_ID'),
+    authDomain: _env('WEB_AUTH_DOMAIN'),
+    storageBucket: _env('WEB_STORAGE_BUCKET'),
+  );
 
   static FirebaseOptions get android => FirebaseOptions(
-        apiKey: _env('FIREBASE_ANDROID_API_KEY'),
-        appId: _env('FIREBASE_ANDROID_APP_ID'),
-        messagingSenderId: _env('FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: _env('FIREBASE_PROJECT_ID'),
-        storageBucket: _env('FIREBASE_STORAGE_BUCKET'),
-      );
+    apiKey: _env('ANDROID_API_KEY'),
+    appId: _env('ANDROID_APP_ID'),
+    messagingSenderId: _env('ANDROID_MESSAGING_SENDER_ID'),
+    projectId: _env('ANDROID_PROJECT_ID'),
+    storageBucket: _env('ANDROID_STORAGE_BUCKET'),
+  );
 
   static FirebaseOptions get ios => FirebaseOptions(
-        apiKey: _env('FIREBASE_IOS_API_KEY'),
-        appId: _env('FIREBASE_IOS_APP_ID'),
-        messagingSenderId: _env('FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: _env('FIREBASE_PROJECT_ID'),
-        storageBucket: _env('FIREBASE_STORAGE_BUCKET'),
-        iosBundleId: _env('FIREBASE_IOS_BUNDLE_ID'),
-        iosClientId: _env('FIREBASE_IOS_CLIENT_ID'),
-      );
+    apiKey: _env('IOS_API_KEY'),
+    appId: _env('IOS_APP_ID'),
+    messagingSenderId: _env('IOS_MESSAGING_SENDER_ID'),
+    projectId: _env('IOS_PROJECT_ID'),
+    storageBucket: _env('IOS_STORAGE_BUCKET'),
+    iosBundleId: _env('IOS_BUNDLE_ID'),
+    iosClientId: _env('IOS_CLIENT_ID'),
+  );
 
   static FirebaseOptions get macos => FirebaseOptions(
-        apiKey: _env('FIREBASE_IOS_API_KEY'),
-        appId: _env('FIREBASE_IOS_APP_ID'),
-        messagingSenderId: _env('FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: _env('FIREBASE_PROJECT_ID'),
-        storageBucket: _env('FIREBASE_STORAGE_BUCKET'),
-        iosBundleId: _env('FIREBASE_IOS_BUNDLE_ID'),
-        iosClientId: _env('FIREBASE_IOS_CLIENT_ID'),
-      );
+    apiKey: _env('IOS_API_KEY'),
+    appId: _env('IOS_APP_ID'),
+    messagingSenderId: _env('IOS_MESSAGING_SENDER_ID'),
+    projectId: _env('IOS_PROJECT_ID'),
+    storageBucket: _env('IOS_STORAGE_BUCKET'),
+    iosBundleId: _env('IOS_BUNDLE_ID'),
+    iosClientId: _env('IOS_CLIENT_ID'),
+  );
 
   static FirebaseOptions get windows => FirebaseOptions(
-        apiKey: _env('FIREBASE_ANDROID_API_KEY'),
-        appId: _env('FIREBASE_ANDROID_APP_ID'),
-        messagingSenderId: _env('FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: _env('FIREBASE_PROJECT_ID'),
-        storageBucket: _env('FIREBASE_STORAGE_BUCKET'),
-      );
+    apiKey: _env('ANDROID_API_KEY'),
+    appId: _env('ANDROID_APP_ID'),
+    messagingSenderId: _env('ANDROID_MESSAGING_SENDER_ID'),
+    projectId: _env('ANDROID_PROJECT_ID'),
+    storageBucket: _env('ANDROID_STORAGE_BUCKET'),
+  );
 }

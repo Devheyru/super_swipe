@@ -6,9 +6,6 @@ import 'package:super_swipe/core/services/firestore_service.dart';
 class RecipeService {
   final FirestoreService _firestoreService;
 
-  // Pagination state
-  DocumentSnapshot? _lastRecipeDocument;
-
   RecipeService(this._firestoreService);
 
   /// Save a recipe to user's saved recipes
@@ -21,6 +18,7 @@ class RecipeService {
       'servings': recipe.servings ?? '${recipe.timeMinutes ~/ 20} servings',
       'difficulty': recipe.difficulty ?? 'Medium',
       'calories': recipe.calories,
+      'titleLowercase': recipe.title.toLowerCase(),
       'savedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -82,15 +80,24 @@ class RecipeService {
   }
 
   /// Delete all saved recipes for a user
+  /// Fix #7: Handle 500+ recipes with chunked batches
   Future<void> clearSavedRecipes(String userId) async {
-    final batch = _firestoreService.instance.batch();
+    const batchSize = 500;
     final snapshot = await _firestoreService.userSavedRecipes(userId).get();
 
-    for (var doc in snapshot.docs) {
-      batch.delete(doc.reference);
-    }
+    // Process in chunks of 500
+    for (var i = 0; i < snapshot.docs.length; i += batchSize) {
+      final batch = _firestoreService.instance.batch();
+      final end = (i + batchSize < snapshot.docs.length)
+          ? i + batchSize
+          : snapshot.docs.length;
 
-    await batch.commit();
+      for (var j = i; j < end; j++) {
+        batch.delete(snapshot.docs[j].reference);
+      }
+
+      await batch.commit();
+    }
   }
 
   // ============================================
@@ -98,10 +105,11 @@ class RecipeService {
   // ============================================
 
   /// Get recipes by energy level with pagination
+  /// Fix #6: Pagination state passed as parameter
   Future<List<Recipe>> getRecipesByEnergyLevel({
     required int energyLevel,
     int limit = 10,
-    bool loadMore = false,
+    DocumentSnapshot? startAfterDoc,
   }) async {
     Query query = _firestoreService.recipes
         .where('isActive', isEqualTo: true)
@@ -109,20 +117,12 @@ class RecipeService {
         .orderBy('stats.popularityScore', descending: true)
         .limit(limit);
 
-    // If loading more, start after last document
-    if (loadMore && _lastRecipeDocument != null) {
-      query = query.startAfterDocument(_lastRecipeDocument!);
-    } else {
-      // Reset pagination for new query
-      _lastRecipeDocument = null;
+    // If loading more, start after provided document
+    if (startAfterDoc != null) {
+      query = query.startAfterDocument(startAfterDoc);
     }
 
     final snapshot = await query.get();
-
-    if (snapshot.docs.isNotEmpty) {
-      _lastRecipeDocument = snapshot.docs.last;
-    }
-
     return snapshot.docs.map((doc) => Recipe.fromFirestore(doc)).toList();
   }
 
@@ -158,7 +158,7 @@ class RecipeService {
 
     final snapshot = await _firestoreService.recipes
         .where('isActive', isEqualTo: true)
-        .orderBy('title')
+        .orderBy('titleLowercase')
         .startAt([normalizedQuery])
         .endAt(['$normalizedQuery\uf8ff'])
         .limit(20)
@@ -175,12 +175,4 @@ class RecipeService {
     }
     return null;
   }
-
-  /// Reset pagination (call when changing filters)
-  void resetPagination() {
-    _lastRecipeDocument = null;
-  }
-
-  /// Check if more recipes are available
-  bool get hasMoreRecipes => _lastRecipeDocument != null;
 }
