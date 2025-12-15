@@ -138,7 +138,7 @@ class ImageLabelingService {
     ])) {
       String leafyType = 'Leafy Greens';
 
-      if (labelSet.contains('cabbage') || labelSet.contains('kale')) {
+      if (labelSet.contains('cabbage')) {
         leafyType = 'Cabbage';
       } else if (labelSet.contains('lettuce')) {
         leafyType = 'Lettuce';
