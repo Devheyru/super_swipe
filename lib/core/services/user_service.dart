@@ -117,7 +117,6 @@ class UserService {
       transaction.update(userRef, {
         'carrots.current': currentCarrots - amount,
         'stats.totalCarrotsSpent': FieldValue.increment(amount),
-        'stats.recipesUnlocked': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
