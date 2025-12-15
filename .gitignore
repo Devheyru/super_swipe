@@ -121,7 +121,6 @@ firebase-debug.log
 # Firebase Configuration Files (SENSITIVE - DO NOT COMMIT)
 **/GoogleService-Info.plist
 **/google-services.json
-firebase_options.dart
 
 # Environment files
 .env
