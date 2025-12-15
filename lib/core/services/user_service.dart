@@ -155,7 +155,7 @@ class UserService {
         'title': recipe.title,
         'imageUrl': recipe.imageUrl,
         'cookTime': recipe.cookTime ?? '${recipe.timeMinutes} min',
-        'servings': recipe.servings ?? '${recipe.timeMinutes ~/ 20} servings',
+        'servings': recipe.servings ?? '4 servings',
         'difficulty': recipe.difficulty ?? 'Medium',
         'calories': recipe.calories,
         // Fix #8: Include lowercase title for search
