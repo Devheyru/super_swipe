@@ -36,9 +36,10 @@ class _BootstrapAppState extends State<_BootstrapApp> {
 
   void _startInit() {
     setState(() {
-      _initFuture = runZonedGuarded(_init, (error, stack) {
-        debugPrint('Uncaught bootstrap error: $error');
+      _initFuture = _init().catchError((error, stack) {
+        debugPrint('Bootstrap error: $error');
         debugPrint('Stack trace: $stack');
+        throw error; // Re-throw so FutureBuilder shows error screen
       });
     });
   }
