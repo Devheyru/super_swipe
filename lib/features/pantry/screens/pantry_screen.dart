@@ -16,6 +16,7 @@ class PantryScreen extends ConsumerStatefulWidget {
 
 class _PantryScreenState extends ConsumerState<PantryScreen> {
   String _searchQuery = '';
+  bool _isSubmitting = false; // Fix #14: Prevent double-submission
 
   @override
   Widget build(BuildContext context) {
@@ -166,9 +167,35 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   return Dismissible(
                     key: Key(item.id),
                     direction: DismissDirection.endToStart,
+
+                    /// Fix #11: Proper error handling to prevent UI/Firestore desync
                     confirmDismiss: (_) async {
                       if (_requireAuth()) return false;
-                      return true;
+
+                      final authState = ref.read(authProvider);
+                      if (authState.user == null) return false;
+
+                      try {
+                        final pantryService = ref.read(pantryServiceProvider);
+                        await pantryService.deletePantryItem(
+                          authState.user!.uid,
+                          item.id,
+                        );
+                        return true; // Allow dismissal only after successful delete
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Failed to delete: ${e.toString()}',
+                              ),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                        return false; // Prevent dismissal on error
+                      }
                     },
                     background: Container(
                       alignment: Alignment.centerRight,
@@ -179,15 +206,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                         color: AppTheme.errorColor,
                       ),
                     ),
-                    onDismissed: (_) async {
-                      final authState = ref.read(authProvider);
-                      if (authState.user == null) return;
-                      final pantryService = ref.read(pantryServiceProvider);
-                      await pantryService.deletePantryItem(
-                        authState.user!.uid,
-                        item.id,
-                      );
-                    },
                     child: InkWell(
                       onTap: () {
                         if (_requireAuth()) return;
@@ -335,48 +353,68 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-              if (name.isEmpty) return;
-              if (_requireAuth()) return;
+            onPressed: _isSubmitting
+                ? null
+                : () async {
+                    if (_isSubmitting)
+                      return; // Fix #14: Prevent double-submission
 
-              final authState = ref.read(authProvider);
-              if (authState.user == null) return;
+                    final name = nameController.text.trim();
+                    final qty = int.tryParse(qtyController.text.trim()) ?? 1;
+                    if (name.isEmpty) return;
+                    if (_requireAuth()) return;
 
-              final pantryService = ref.read(pantryServiceProvider);
+                    final authState = ref.read(authProvider);
+                    if (authState.user == null) return;
 
-              try {
-                if (itemId == null) {
-                  // Add new item
-                  await pantryService.addPantryItem(
-                    authState.user!.uid,
-                    name,
-                    quantity: qty,
-                    category: 'other',
-                    source: 'manual',
-                  );
-                } else {
-                  // Edit existing item
-                  await pantryService.updatePantryItem(
-                    authState.user!.uid,
-                    itemId,
-                    name: name,
-                    quantity: qty,
-                  );
-                }
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Save'),
+                    setState(() => _isSubmitting = true);
+
+                    final pantryService = ref.read(pantryServiceProvider);
+
+                    try {
+                      if (itemId == null) {
+                        // Add new item
+                        await pantryService.addPantryItem(
+                          authState.user!.uid,
+                          name,
+                          quantity: qty,
+                          category: 'other',
+                          source: 'manual',
+                        );
+                      } else {
+                        // Edit existing item
+                        await pantryService.updatePantryItem(
+                          authState.user!.uid,
+                          itemId,
+                          name: name,
+                          quantity: qty,
+                        );
+                      }
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isSubmitting = false);
+                      }
+                    }
+                  },
+            child: _isSubmitting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Save'),
           ),
         ],
       ),

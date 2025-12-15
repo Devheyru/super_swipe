@@ -33,8 +33,13 @@ class PantryItem {
   });
 
   /// Factory constructor from Firestore document
+  /// Fix #1 & #2: Null-safe with flexible type for compatibility
   factory PantryItem.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = (doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+
+    if (!doc.exists || data.isEmpty) {
+      throw StateError('Document does not exist or has no data: ${doc.id}');
+    }
 
     return PantryItem(
       id: data['id'] ?? doc.id,

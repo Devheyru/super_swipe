@@ -31,8 +31,13 @@ class UserProfile {
   });
 
   /// Factory constructor from Firestore document
+  /// Fix #2: Null-safe with flexible type for compatibility
   factory UserProfile.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = (doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+
+    if (!doc.exists || data.isEmpty) {
+      throw StateError('Document does not exist: ${doc.id}');
+    }
 
     return UserProfile(
       uid: data['uid'] ?? doc.id,
