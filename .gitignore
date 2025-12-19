@@ -116,7 +116,7 @@ coverage/
 .firebase/
 *-debug.log
 firebase-debug.log
-.firebaserc
+# NOTE: .firebaserc should be committed (not sensitive, contains project ID)
 
 # Firebase Configuration Files (SENSITIVE - DO NOT COMMIT)
 **/GoogleService-Info.plist
@@ -139,17 +139,20 @@ firebase-debug.log
 Thumbs.db
 .DS_Store
 
-# Custom: Temporary documentation (keep only README.md and SYSTEM_DOCUMENTATION.md)
+# IDE and Editor
 .agent/
-*_COMPLETE.md
-*_FIXED.md
-*_STATUS.md
-*_PLAN.md
-*_SUMMARY.md
-*_EVALUATION.md
-OPTIMIZATION_*.md
-PERFORMANCE_*.md
-PHASE_*.md
-FIRESTORE_*.md
-INDEX_*.md
-PANTRY_*.md
+.cursor/
+
+# Temporary project files (if any)
+*_TEMP.md
+*.backup
+*.old
+
+# Firebase Emulator Data (if using Firebase Emulator)
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
+# Flutter/Dart Tool Chains
+.dart_tool/ephemeral/
+pubspec.lock.backup

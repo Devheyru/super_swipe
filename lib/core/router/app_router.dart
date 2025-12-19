@@ -135,8 +135,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'scanResults',
                 parentNavigatorKey: _rootNavigatorKey,
                 builder: (context, state) {
-                  final items = state.extra as List<String>? ?? [];
-                  return ScanResultsScreen(detectedItems: items);
+                  // Handle both old format (List<String>) and new format (Map)
+                  if (state.extra is Map) {
+                    final data = state.extra as Map;
+                    return ScanResultsScreen(
+                      detectedItems: data['labels'] as List<String>? ?? [],
+                      quotaStatus: data['quotaStatus'],
+                      visionSource: data['visionSource'],
+                    );
+                  } else {
+                    // Backward compatibility
+                    final items = state.extra as List<String>? ?? [];
+                    return ScanResultsScreen(detectedItems: items);
+                  }
                 },
               ),
             ],

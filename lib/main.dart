@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:device_preview/device_preview.dart';
+// import 'package:device_preview/device_preview.dart'; // DEBUG: Commented for release
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -37,20 +37,20 @@ class _BootstrapAppState extends State<_BootstrapApp> {
   void _startInit() {
     setState(() {
       _initFuture = runZonedGuarded(_init, (error, stack) {
-        debugPrint('Uncaught bootstrap error: $error');
-        debugPrint('Stack trace: $stack');
+        // debugPrint('Uncaught bootstrap error: $error'); // DEBUG: Commented for release
+        // debugPrint('Stack trace: $stack'); // DEBUG: Commented for release
       });
     });
   }
 
   Future<void> _init() async {
-    final sw = Stopwatch()..start();
+    // final sw = Stopwatch()..start(); // DEBUG: Commented for release
 
     // 1) Load env quickly (do not hard-crash if missing).
     try {
       await dotenv.load(fileName: '.env').timeout(const Duration(seconds: 2));
     } catch (e) {
-      debugPrint('Warning: Could not load .env: $e');
+      // debugPrint('Warning: Could not load .env: $e'); // DEBUG: Commented for release
     }
 
     // 2) Initialize Firebase robustly.
@@ -62,9 +62,9 @@ class _BootstrapAppState extends State<_BootstrapApp> {
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
 
-    if (kDebugMode) {
-      debugPrint('Bootstrap init done in ${sw.elapsedMilliseconds}ms');
-    }
+    // if (kDebugMode) { // DEBUG: Commented for release
+    //   debugPrint('Bootstrap init done in ${sw.elapsedMilliseconds}ms');
+    // }
   }
 
   @override
@@ -92,10 +92,12 @@ class _BootstrapAppState extends State<_BootstrapApp> {
         }
 
         // DevicePreview for development/testing
-        return DevicePreview(
-          enabled: !kReleaseMode,
-          builder: (context) => const ProviderScope(child: SuperSwipeApp()),
-        );
+        // DEBUG: Commented for release
+        // return DevicePreview(
+        //   enabled: !kReleaseMode,
+        //   builder: (context) => const ProviderScope(child: SuperSwipeApp()),
+        // );
+        return const ProviderScope(child: SuperSwipeApp());
       },
     );
   }
@@ -202,8 +204,8 @@ class SuperSwipeApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
-      locale: DevicePreview.locale(context),
-      builder: DevicePreview.appBuilder,
+      // locale: DevicePreview.locale(context), // DEBUG: Commented for release
+      // builder: DevicePreview.appBuilder, // DEBUG: Commented for release
     );
   }
 }

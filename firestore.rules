@@ -1,0 +1,192 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isNotAnonymous() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // ==========================================
+    // VALIDATION FUNCTIONS
+    // ==========================================
+    
+    function validUserProfile() {
+      let data = request.resource.data;
+      return data.uid is string
+             && data.displayName is string
+             && data.isAnonymous is bool
+             && data.subscriptionStatus is string
+             && data.carrots is map
+             && data.preferences is map
+             && data.appState is map
+             && data.stats is map;
+    }
+    
+    function validPantryItem() {
+      let data = request.resource.data;
+      return data.userId is string
+             && data.name is string
+             && data.normalizedName is string
+             && data.quantity is int
+             && data.quantity > 0
+             && data.category is string
+             && data.source in ['manual', 'scanned', 'ai-suggested'];
+    }
+    
+    function validVisionScanLog() {
+      let data = request.resource.data;
+      return data.userId is string
+             && data.timestamp is timestamp
+             && data.source in ['mlKit', 'cloudVision', 'mlKitFallback']
+             && data.itemsDetected is int
+             && data.averageConfidence is number
+             && data.objectCount is int
+             && data.quotaAvailable is bool
+             && data.processingTimeMs is number;
+    }
+    
+    function validQuotaSummary() {
+      let data = request.resource.data;
+      return data.date is timestamp
+             && data.totalScans is int
+             && data.mlKitScans is int
+             && data.cloudVisionScans is int
+             && data.fallbackScans is int
+             && data.estimatedCost is number
+             && data.quotaRemaining is int;
+    }
+    
+    function validQuotaSettings() {
+      let data = request.resource.data;
+      return data.dailyLimit is int
+             && data.monthlyLimit is int
+             && data.isPremium is bool;
+    }
+
+    // ==========================================
+    // USER PROFILES COLLECTION
+    // ==========================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isSignedIn() 
+                    && request.auth.uid == userId
+                    && validUserProfile()
+                    && request.resource.data.uid == userId;
+      allow update: if isOwner(userId) 
+                    && request.resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+
+      // PANTRY SUB-COLLECTION
+      match /pantry/{itemId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+                      && validPantryItem()
+                      && request.resource.data.userId == userId;
+        allow update: if isOwner(userId)
+                      && request.resource.data.userId == userId;
+        allow delete: if isOwner(userId);
+      }
+
+      // SAVED RECIPES SUB-COLLECTION
+      match /savedRecipes/{recipeId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+                      && request.resource.data.recipeId is string;
+        allow update, delete: if isOwner(userId);
+      }
+
+      // RECIPE HISTORY SUB-COLLECTION
+      match /recipeHistory/{historyId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // ==========================================
+    // RECIPES COLLECTION (Global, Read-Only)
+    // ==========================================
+    
+    match /recipes/{recipeId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Admin-only via backend
+    }
+
+    // ==========================================
+    // INGREDIENTS COLLECTION (Optional)
+    // ==========================================
+    
+    match /ingredients/{ingredientId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Admin-only via backend
+    }
+
+    // ==========================================
+    // VISION ANALYTICS COLLECTIONS
+    // ==========================================
+    
+    // Vision Scan Logs - Users can read/write only their own logs
+    match /vision_scan_logs/{logId} {
+      allow read: if isSignedIn() && 
+                     resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && 
+                       validVisionScanLog() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false; // Logs are immutable
+    }
+    
+    // Vision Quota Summaries - Users can read/write only their own summaries
+    // Document ID format: {userId}_{YYYY-MM-DD}
+    match /vision_quota_summaries/{summaryId} {
+      allow read: if isSignedIn() && 
+                     summaryId.matches(request.auth.uid + '_.*');
+      allow create: if isSignedIn() && 
+                       validQuotaSummary() &&
+                       summaryId.matches(request.auth.uid + '_.*');
+      allow update: if isSignedIn() && 
+                       validQuotaSummary() &&
+                       summaryId.matches(request.auth.uid + '_.*');
+      allow delete: if false; // Summaries should not be deleted
+    }
+    
+    // User Quota Settings - Users can read their own, admins can write
+    match /vision_user_quota_settings/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       validQuotaSettings();
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       validQuotaSettings();
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // BLOCK ALL OTHER PATHS
+    // ==========================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+

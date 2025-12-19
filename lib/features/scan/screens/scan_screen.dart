@@ -1,22 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
+import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 import 'package:super_swipe/features/scan/services/image_labeling_service.dart';
 
-class ScanScreen extends StatefulWidget {
+class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
 
   @override
-  State<ScanScreen> createState() => _ScanScreenState();
+  ConsumerState<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
+class _ScanScreenState extends ConsumerState<ScanScreen> {
   final ImagePicker _picker = ImagePicker();
   final ImageLabelingService _labelingService = ImageLabelingService();
   bool _isProcessing = false;
   int _selectedMode = 0; // 0: Fridge, 1: Pantry
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeService();
+  }
+
+  Future<void> _initializeService() async {
+    final authUser = ref.read(currentUserProvider);
+    if (authUser != null && !authUser.isAnonymous) {
+      await _labelingService.init(userId: authUser.uid);
+    } else {
+      await _labelingService.init();
+    }
+  }
 
   @override
   void dispose() {
@@ -56,8 +73,19 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           );
         } else {
-          // Navigate to results
-          context.goNamed('scanResults', extra: labels);
+          // Get quota status and vision source for UI feedback
+          final quotaStatus = await _labelingService.getQuotaStatus();
+          final visionSource = _labelingService.lastUsedSource;
+
+          // Navigate to results with metadata
+          context.goNamed(
+            'scanResults',
+            extra: {
+              'labels': labels,
+              'quotaStatus': quotaStatus,
+              'visionSource': visionSource,
+            },
+          );
         }
       }
     } catch (e) {
