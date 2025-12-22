@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:super_swipe/core/models/user_profile.dart';
@@ -60,10 +62,65 @@ class UserService {
   /// Stream user profile (real-time updates)
   Stream<UserProfile?> watchUserProfile(String userId) {
     return _firestoreService.users.doc(userId).snapshots().map((doc) {
-      if (doc.exists) {
-        return UserProfile.fromFirestore(doc);
+      if (!doc.exists) return null;
+
+      final profile = UserProfile.fromFirestore(doc);
+
+      // SPEC: Free users get 5 unlocks per week. This reset must happen even if
+      // the user never attempts to unlock (otherwise they can get stuck at 0).
+      final subscription = profile.subscriptionStatus.toLowerCase();
+      final isPremium = subscription == 'premium' || subscription == 'pro';
+
+      if (!isPremium && _needsWeeklyCarrotReset(profile.carrots.lastResetAt)) {
+        // Fire-and-forget a transaction reset in Firestore (source of truth).
+        unawaited(_resetWeeklyCarrotsIfNeeded(userId));
+
+        // Optimistic UI: immediately show the refreshed carrots.
+        return profile.copyWith(
+          carrots: profile.carrots.copyWith(
+            current: profile.carrots.max,
+            lastResetAt: DateTime.now(),
+          ),
+        );
       }
-      return null;
+
+      return profile;
+    });
+  }
+
+  bool _needsWeeklyCarrotReset(DateTime? lastResetAt) {
+    if (lastResetAt == null) return true;
+    return DateTime.now().difference(lastResetAt).inDays >= 7;
+  }
+
+  Future<void> _resetWeeklyCarrotsIfNeeded(String userId) async {
+    final userRef = _firestoreService.users.doc(userId);
+
+    await _firestoreService.instance.runTransaction((transaction) async {
+      final snapshot = await transaction.get(userRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>? ?? {};
+      final subscriptionStatus =
+          (data['subscriptionStatus'] as String?)?.toLowerCase() ?? 'free';
+      final isPremium =
+          subscriptionStatus == 'premium' || subscriptionStatus == 'pro';
+      if (isPremium) return;
+
+      final carrots = (data['carrots'] as Map<String, dynamic>?) ?? {};
+      final maxCarrots = (carrots['max'] as num?)?.toInt() ?? 5;
+      final lastResetAt = (carrots['lastResetAt'] as Timestamp?)?.toDate();
+
+      final needsReset =
+          lastResetAt == null ||
+          DateTime.now().difference(lastResetAt).inDays >= 7;
+      if (!needsReset) return;
+
+      transaction.update(userRef, {
+        'carrots.current': maxCarrots,
+        'carrots.lastResetAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
   }
 
@@ -135,33 +192,54 @@ class UserService {
 
       if (!userSnapshot.exists) throw StateError('User not found');
 
+      // Prevent double-spending: if already unlocked/saved, do nothing.
+      final savedSnapshot = await transaction.get(recipeRef);
+      if (savedSnapshot.exists) {
+        return true;
+      }
+
       final data = userSnapshot.data() as Map<String, dynamic>?;
       final carrots = (data?['carrots'] as Map<String, dynamic>?) ?? {};
-      final currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
+      final maxCarrots = (carrots['max'] as num?)?.toInt() ?? 5;
+      var currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
+      final subscriptionStatus =
+          (data?['subscriptionStatus'] as String?)?.toLowerCase() ?? 'free';
+      final isPremium =
+          subscriptionStatus == 'premium' || subscriptionStatus == 'pro';
 
-      if (currentCarrots < 1) return false;
+      // Weekly reset (simple 7-day window). This keeps the “5 unlocks per week” promise.
+      if (!isPremium) {
+        final lastResetAt = (carrots['lastResetAt'] as Timestamp?)?.toDate();
+        final needsReset =
+            lastResetAt == null ||
+            DateTime.now().difference(lastResetAt).inDays >= 7;
+        if (needsReset) {
+          currentCarrots = maxCarrots;
+          transaction.update(userRef, {
+            'carrots.current': currentCarrots,
+            'carrots.lastResetAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
 
-      // Deduct carrot
-      transaction.update(userRef, {
-        'carrots.current': currentCarrots - 1,
-        'stats.totalCarrotsSpent': FieldValue.increment(1),
+      if (!isPremium && currentCarrots < 1) return false;
+
+      // Update user stats (and carrots for free users)
+      final userUpdates = <String, dynamic>{
         'stats.recipesUnlocked': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (!isPremium) {
+        userUpdates.addAll({
+          'carrots.current': currentCarrots - 1,
+          'stats.totalCarrotsSpent': FieldValue.increment(1),
+        });
+      }
+      transaction.update(userRef, userUpdates);
 
       // Save recipe
-      transaction.set(recipeRef, {
-        'recipeId': recipe.id,
-        'title': recipe.title,
-        'imageUrl': recipe.imageUrl,
-        'cookTime': recipe.cookTime ?? '${recipe.timeMinutes} min',
-        'servings': recipe.servings ?? '4 servings',
-        'difficulty': recipe.difficulty ?? 'Medium',
-        'calories': recipe.calories,
-        // Fix #8: Include lowercase title for search
-        'titleLowercase': recipe.title.toLowerCase(),
-        'savedAt': FieldValue.serverTimestamp(),
-      });
+      transaction.set(recipeRef, recipe.toSavedRecipeFirestore());
 
       return true;
     });

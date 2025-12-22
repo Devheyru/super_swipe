@@ -36,7 +36,7 @@ Super Swipe is a **Tinder-style AI recipe discovery app** that helps users find 
 - **NOT a pantry tracker** - Focus is on recipe discovery
 - **Gamified with Carrots** - Weekly unlock limit system
 - **Energy-based Matching** - Recipes matched to user's current energy
-- **ML-Powered Scanning** - 85-90% ingredient detection accuracy
+- **Hybrid AI Vision** - Smart combination of ML Kit and Cloud Vision with cost controls
 
 ### 1.3 Target Users
 
@@ -143,11 +143,13 @@ lib/
 | cached_network_image | ^3.4.1 | Image caching |
 | appinio_swiper | ^2.1.1 | Swipe cards |
 
-### 3.4 ML & Camera
+### 3.4 AI Vision & Camera
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| google_mlkit_image_labeling | ^0.14.1 | Image recognition |
+| google_mlkit_image_labeling | ^0.14.0 | On-device food detection |
+| google_mlkit_object_detection | ^0.15.0 | Multi-item detection |
+| http | ^1.2.2 | Cloud Vision API calls |
 | camera | ^0.11.3 | Camera access |
 | image_picker | ^1.2.1 | Image selection |
 | permission_handler | ^12.0.1 | Permissions |
@@ -227,7 +229,7 @@ lib/
   unit: string,                 // "pieces", "cups", "lbs"
   
   // Metadata
-  source: string,               // "manual", "scanned", "ai-suggested"
+  source: string,               // "manual", "ml-kit", "cloud-vision"
   detectionConfidence: number?, // 0.0-1.0 (if scanned)
   
   // Expiration
@@ -344,6 +346,17 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if false;  // Admin only
     }
+    
+    // HYBRID VISION QUOTA & USAGE TRACKING
+    match /vision_usage/{usageId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    match /user_quotas/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+    }
   }
 }
 ```
@@ -454,6 +467,42 @@ RecipeImage(
 // Extension
 recipe.imageUrl.toOptimizedImage(fit: BoxFit.cover)
 ```
+
+### 5.6 HybridVisionService
+
+**Purpose**: Orchestrates ML Kit and Cloud Vision usage with cost controls
+
+**Methods**:
+- `init()` - Initialize service and user quotas
+- `detectFood(image, userId, forceCloudVision)` - Smart food detection
+- `_shouldUpgradeToCloudVision()` - Decision logic for API usage
+
+### 5.7 QuotaService
+
+**Purpose**: Manages Cloud Vision API usage and enforces limits
+
+**Methods**:
+- `checkQuota(userId)` - Check current usage status
+- `recordUsage(userId, details)` - Log scan analytics
+- `_getUserLimits(userId)` - Fetch user-specific quotas
+- `_initializeUserQuota(userId)` - Set up default quotas for new users
+
+### 5.8 MLKitService
+
+**Purpose**: On-device food detection with ML Kit
+
+**Methods**:
+- `detectFood(image)` - Process image with ML Kit
+- `isConfidentEnough(result)` - Evaluate if ML Kit is sufficient
+
+### 5.9 CloudVisionService
+
+**Purpose**: High-accuracy food detection via Google Cloud Vision API
+
+**Methods**:
+- `detectFood(image)` - Process image with Cloud Vision
+- `_parseResponse()` - Advanced filtering and normalization
+- `_findBestQuantity()` - Priority-based quantity matching
 
 ---
 
@@ -629,30 +678,51 @@ if (userProfile.carrots.current >= 1) {
 | 2 | ⚡ | Okay | 15-30 min | Normal cooking |
 | 3 | 🔥 | High | 30+ min | Complex recipes, multi-step |
 
-### 8.3 ML Ingredient Detection
+### 8.3 Hybrid AI Vision System
 
-**Technology**: Google ML Kit Image Labeling
+**Architecture**: Smart ML Kit + Cloud Vision combination
 
-**Accuracy**: 85-90% for common ingredients
+**Strategy**: Cost-optimized graduated approach
+- **ML Kit First**: Fast, free on-device processing
+- **Cloud Vision Upgrade**: High-accuracy API used selectively
 
-**Process**:
+**Decision Logic**:
 ```
-1. User taps camera icon
-2. Camera opens (or gallery selection)
-3. Image sent to ML Kit
-4. ML returns labels with confidence scores
-5. Filter to food-related items (confidence > 50%)
-6. Display in ScanResultsScreen
-7. User reviews, edits, selects items
-8. Batch add to Firestore pantry
+IF 1 item detected AND confidence > 50%
+  → Use ML Kit (fast, free)
+
+IF 2-3 items detected AND confidence > 80%
+  → Use ML Kit
+
+ELSE (low confidence OR 4+ items)
+  → Upgrade to Cloud Vision (high accuracy)
 ```
 
-**Categories Detected**:
-- Dairy (milk, cheese, yogurt)
-- Produce (fruits, vegetables)
-- Proteins (meat, eggs, tofu)
-- Grains (bread, pasta, rice)
-- Pantry staples (flour, sugar, spices)
+**Cost Controls**:
+- **Free Users**: 10 Cloud Vision requests/day
+- **Premium Users**: 50 Cloud Vision requests/day
+- **Graceful Degradation**: Falls back to ML Kit when quota reached
+- **Real-time Tracking**: Firestore-based usage monitoring
+
+**Process Flow**:
+```
+1. User takes photo
+2. ML Kit processes image (on-device)
+3. System evaluates confidence & item count
+4. If needed, upgrade to Cloud Vision (API)
+5. Advanced filtering & normalization
+6. Quantity detection with position deduplication
+7. Display results with AI source indicator
+8. User reviews, edits, confirms
+9. Batch add to Firestore pantry
+10. Usage logged for analytics
+```
+
+**Advanced Features**:
+- **Food Filtering**: Removes generic labels (e.g., "natural foods")
+- **Smart Normalization**: Consolidates similar items
+- **Quantity Accuracy**: Priority-based matching with position deduplication
+- **Manual Editing**: Always available for user refinement
 
 ### 8.4 Real-time Synchronization
 
@@ -840,16 +910,21 @@ flutter pub get
 
 ---
 
-### ✅ Milestone 3: ML Scanning (Complete - 95/100)
+### ✅ Milestone 3: Hybrid AI Vision (Complete - 98/100)
 
 **Deliverables**:
 - [x] Camera integration
-- [x] ML Kit image labeling
-- [x] 85-90% detection accuracy
+- [x] ML Kit on-device detection
+- [x] Cloud Vision API integration
+- [x] Cost-controlled quota system
+- [x] Graduated decision logic
+- [x] Advanced filtering & normalization
+- [x] Quantity detection with deduplication
 - [x] Batch add to pantry
-- [x] Edit detected items
+- [x] Real-time usage tracking
+- [x] UI indicators for AI source
 
-**Status**: Production-ready
+**Status**: Production-ready with cost controls
 
 ---
 

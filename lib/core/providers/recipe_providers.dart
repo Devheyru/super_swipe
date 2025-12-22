@@ -20,6 +20,22 @@ final savedRecipesProvider = StreamProvider<List<Recipe>>((ref) {
   return ref.read(recipeServiceProvider).watchSavedRecipes(userId);
 });
 
+/// StreamProvider for a single saved recipe document (used for Recipe Detail page)
+final savedRecipeProvider = StreamProvider.family<Recipe?, String>((
+  ref,
+  recipeId,
+) {
+  final userId = ref.watch(authProvider).user?.uid;
+  if (userId == null) return Stream.value(null);
+
+  final firestore = ref.watch(firestoreServiceProvider);
+  return firestore
+      .userSavedRecipes(userId)
+      .doc(recipeId)
+      .snapshots()
+      .map((doc) => doc.exists ? Recipe.fromFirestore(doc) : null);
+});
+
 /// Provider to check if a specific recipe is saved
 final isRecipeSavedProvider = FutureProvider.family<bool, String>((
   ref,

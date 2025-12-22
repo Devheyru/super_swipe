@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:super_swipe/core/services/firestore_service.dart';
 import 'package:super_swipe/core/services/user_service.dart';
 import 'package:super_swipe/core/services/pantry_service.dart';
+import 'package:super_swipe/core/services/config_service.dart';
+import 'package:super_swipe/core/services/quota_service.dart';
 
 /// Base Firestore service provider
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
@@ -18,4 +20,14 @@ final userServiceProvider = Provider<UserService>((ref) {
 final pantryServiceProvider = Provider<PantryService>((ref) {
   final firestoreService = ref.watch(firestoreServiceProvider);
   return PantryService(firestoreService);
+});
+
+/// Config service provider
+final configServiceProvider = Provider<ConfigService>((ref) {
+  return ConfigService();
+});
+
+/// Quota service provider
+final quotaServiceProvider = Provider<QuotaService>((ref) {
+  return QuotaService();
 });

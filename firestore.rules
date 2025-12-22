@@ -24,6 +24,10 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    function hasRoleField(data) {
+      return data.keys().hasAny(['role']);
+    }
     
     // ==========================================
     // VALIDATION FUNCTIONS
@@ -38,7 +42,9 @@ service cloud.firestore {
              && data.carrots is map
              && data.preferences is map
              && data.appState is map
-             && data.stats is map;
+             && data.stats is map
+             // Prevent privilege escalation: clients must never set roles.
+             && !hasRoleField(data);
     }
     
     function validPantryItem() {
@@ -47,7 +53,8 @@ service cloud.firestore {
              && data.name is string
              && data.normalizedName is string
              && data.quantity is int
-             && data.quantity > 0
+             // Allow zero quantities so users can “deplete” items (UI can hide them).
+             && data.quantity >= 0
              && data.category is string
              && data.source in ['manual', 'scanned', 'ai-suggested'];
     }
@@ -70,7 +77,8 @@ service cloud.firestore {
              && data.totalScans is int
              && data.mlKitScans is int
              && data.cloudVisionScans is int
-             && data.fallbackScans is int
+             // Optional fallbackScans
+             && (data.get('fallbackScans', 0) is int)
              && data.estimatedCost is number
              && data.quotaRemaining is int;
     }
@@ -78,8 +86,11 @@ service cloud.firestore {
     function validQuotaSettings() {
       let data = request.resource.data;
       return data.dailyLimit is int
+             && data.dailyLimit >= 0
+             && data.dailyLimit <= 10000
              && data.monthlyLimit is int
-             && data.isPremium is bool;
+             && data.monthlyLimit >= 0
+             && data.monthlyLimit <= 100000;
     }
 
     // ==========================================
@@ -92,8 +103,10 @@ service cloud.firestore {
                     && request.auth.uid == userId
                     && validUserProfile()
                     && request.resource.data.uid == userId;
-      allow update: if isOwner(userId) 
-                    && request.resource.data.uid == userId;
+      allow update: if isOwner(userId)
+                    && request.resource.data.uid == userId
+                    // Prevent privilege escalation: role cannot be added/changed by clients.
+                    && (hasRoleField(resource.data) ? request.resource.data.role == resource.data.role : !hasRoleField(request.resource.data));
       allow delete: if isOwner(userId);
 
       // PANTRY SUB-COLLECTION
@@ -176,6 +189,37 @@ service cloud.firestore {
                        validQuotaSettings();
       allow update: if (isOwner(userId) || isAdmin()) &&
                        validQuotaSettings();
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // HYBRID VISION QUOTA & USAGE TRACKING
+    // ==========================================
+    
+    // Vision Usage Logs - Track each scan (ML Kit or Cloud Vision)
+    match /vision_usage/{usageId} {
+      allow read: if isSignedIn() && 
+                     resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.userId is string &&
+                       request.resource.data.usedCloudVision is bool &&
+                       request.resource.data.itemsDetected is int &&
+                       request.resource.data.itemsDetected >= 0 &&
+                       request.resource.data.averageConfidence is number &&
+                       request.resource.data.averageConfidence >= 0 &&
+                       request.resource.data.averageConfidence <= 1 &&
+                       request.resource.data.processingTimeMs is number &&
+                       request.resource.data.cost is number;
+      allow update, delete: if false; // Usage logs are immutable
+    }
+    
+    // User Quota Limits - Custom limits per user
+    match /user_quotas/{userId} {
+      allow read: if isOwner(userId);
+      // Allow users to create their own initial quota doc
+      allow create: if isOwner(userId); 
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

@@ -6,11 +6,18 @@ class Recipe {
   final String imageUrl;
   final String description;
   final List<String> ingredients; // Display strings
+  final List<String> instructions; // Step-by-step directions
   final List<String> ingredientIds; // IDs for matching
   final int energyLevel; // 0-3
   final int timeMinutes;
   final int calories;
   final List<String> equipment;
+
+  /// Discovery metadata (used by Swipe filters)
+  final String mealType; // breakfast | lunch | dinner | snacks | desserts | drinks
+  final String skillLevel; // beginner | moderate | advanced
+  final List<String> flavorProfiles; // sweet | savory | spicy | mild | umami | comfort food | fresh and light
+  final List<String> prepTags; // minimal prep | microwave friendly | one pan | no chopping | no bake
 
   // New Fields for Firestore Schema
   final bool isPremium;
@@ -26,17 +33,28 @@ class Recipe {
   final String? servings;
   final String? difficulty;
 
+  /// Saved-recipe progress (stored in `users/{uid}/savedRecipes/{recipeId}`)
+  /// Step number last reached (0 = not started).
+  final int currentStep;
+  final DateTime? savedAt;
+  final DateTime? lastStepAt;
+
   Recipe({
     required this.id,
     required this.title,
     required this.imageUrl,
     required this.description,
     required this.ingredients,
+    this.instructions = const [],
     this.ingredientIds = const [],
     this.energyLevel = 2,
     required this.timeMinutes,
     required this.calories,
     required this.equipment,
+    this.mealType = 'dinner',
+    this.skillLevel = 'beginner',
+    this.flavorProfiles = const [],
+    this.prepTags = const [],
     this.isPremium = false,
     this.dietaryTags = const [],
     this.cuisine = 'other',
@@ -47,11 +65,14 @@ class Recipe {
     this.cookTime,
     this.servings,
     this.difficulty,
+    this.currentStep = 0,
+    this.savedAt,
+    this.lastStepAt,
   }) : titleLowercase = titleLowercase ?? title.toLowerCase();
 
   /// Create Recipe from Firestore document
   factory Recipe.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = (doc.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
 
     return Recipe(
       id: doc.id,
@@ -59,11 +80,16 @@ class Recipe {
       imageUrl: data['imageUrl'] ?? '',
       description: data['description'] ?? '',
       ingredients: List<String>.from(data['ingredients'] ?? []),
+      instructions: List<String>.from(data['instructions'] ?? []),
       ingredientIds: List<String>.from(data['ingredientIds'] ?? []),
       energyLevel: data['energyLevel'] ?? 2,
       timeMinutes: data['timeMinutes'] ?? 30,
       calories: data['calories'] ?? 300,
       equipment: List<String>.from(data['equipment'] ?? []),
+      mealType: data['mealType'] ?? 'dinner',
+      skillLevel: data['skillLevel'] ?? 'beginner',
+      flavorProfiles: List<String>.from(data['flavorProfiles'] ?? []),
+      prepTags: List<String>.from(data['prepTags'] ?? []),
       isPremium: data['isPremium'] ?? false,
       dietaryTags: List<String>.from(data['dietaryTags'] ?? []),
       cuisine: data['cuisine'] ?? 'other',
@@ -76,6 +102,9 @@ class Recipe {
       cookTime: data['cookTime'],
       servings: data['servings'],
       difficulty: data['difficulty'],
+      currentStep: (data['currentStep'] as num?)?.toInt() ?? 0,
+      savedAt: (data['savedAt'] as Timestamp?)?.toDate(),
+      lastStepAt: (data['lastStepAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -86,11 +115,16 @@ class Recipe {
       'imageUrl': imageUrl,
       'description': description,
       'ingredients': ingredients,
+      'instructions': instructions,
       'ingredientIds': ingredientIds,
       'energyLevel': energyLevel,
       'timeMinutes': timeMinutes,
       'calories': calories,
       'equipment': equipment,
+      'mealType': mealType,
+      'skillLevel': skillLevel,
+      'flavorProfiles': flavorProfiles,
+      'prepTags': prepTags,
       'isPremium': isPremium,
       'dietaryTags': dietaryTags,
       'cuisine': cuisine,
@@ -101,6 +135,39 @@ class Recipe {
       if (cookTime != null) 'cookTime': cookTime,
       if (servings != null) 'servings': servings,
       if (difficulty != null) 'difficulty': difficulty,
+    };
+  }
+
+  /// Firestore map for `users/{uid}/savedRecipes/{recipeId}`
+  /// Stores enough data to render the Recipe page offline and track progress.
+  Map<String, dynamic> toSavedRecipeFirestore() {
+    return {
+      'recipeId': id,
+      'title': title,
+      'titleLowercase': titleLowercase,
+      'imageUrl': imageUrl,
+      'description': description,
+      'ingredients': ingredients,
+      'instructions': instructions,
+      'ingredientIds': ingredientIds,
+      'energyLevel': energyLevel,
+      'timeMinutes': timeMinutes,
+      'calories': calories,
+      'equipment': equipment,
+      'mealType': mealType,
+      'skillLevel': skillLevel,
+      'flavorProfiles': flavorProfiles,
+      'prepTags': prepTags,
+      'isPremium': isPremium,
+      'dietaryTags': dietaryTags,
+      'cuisine': cuisine,
+      'timeTier': timeTier,
+      'cookTime': cookTime,
+      'servings': servings,
+      'difficulty': difficulty,
+      'currentStep': currentStep,
+      'savedAt': FieldValue.serverTimestamp(),
+      'lastStepAt': FieldValue.serverTimestamp(),
     };
   }
 }
@@ -131,11 +198,16 @@ extension RecipeExtension on Recipe {
       'imageUrl': imageUrl,
       'description': description,
       'ingredients': ingredients,
+      'instructions': instructions,
       'ingredientIds': ingredientIds,
       'energyLevel': energyLevel,
       'timeMinutes': timeMinutes,
       'calories': calories,
       'equipment': equipment,
+      'mealType': mealType,
+      'skillLevel': skillLevel,
+      'flavorProfiles': flavorProfiles,
+      'prepTags': prepTags,
       'isPremium': isPremium,
       'dietaryTags': dietaryTags,
       'cuisine': cuisine,
@@ -146,6 +218,9 @@ extension RecipeExtension on Recipe {
       if (cookTime != null) 'cookTime': cookTime,
       if (servings != null) 'servings': servings,
       if (difficulty != null) 'difficulty': difficulty,
+      'currentStep': currentStep,
+      if (savedAt != null) 'savedAt': savedAt,
+      if (lastStepAt != null) 'lastStepAt': lastStepAt,
     };
   }
 }

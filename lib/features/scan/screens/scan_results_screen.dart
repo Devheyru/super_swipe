@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/providers/firestore_providers.dart';
 import 'package:super_swipe/core/router/app_router.dart';
+import 'package:super_swipe/core/services/hybrid_vision_service.dart';
+import 'package:super_swipe/core/services/quota_service.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
-import 'package:super_swipe/core/services/vision_quota_service.dart';
-import 'package:super_swipe/core/services/hybrid_vision_service.dart';
+import 'package:super_swipe/features/pantry/widgets/pantry_category_selector.dart';
 
 class DetectedItem {
   String name;
@@ -17,13 +18,13 @@ class DetectedItem {
 
 class ScanResultsScreen extends ConsumerStatefulWidget {
   final List<String> detectedItems;
-  final VisionSource? visionSource;
+  final AISource? aiSource;
   final QuotaStatus? quotaStatus;
 
   const ScanResultsScreen({
     super.key,
     required this.detectedItems,
-    this.visionSource,
+    this.aiSource,
     this.quotaStatus,
   });
 
@@ -33,9 +34,6 @@ class ScanResultsScreen extends ConsumerStatefulWidget {
 
 class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
   late List<DetectedItem> _items;
-
-  // Track which suggestions have been used for each generic item
-  final Map<int, Set<String>> _usedSuggestions = {};
 
   @override
   void initState() {
@@ -48,134 +46,6 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
   void _removeItem(int index) {
     setState(() {
       _items.removeAt(index);
-      // Clean up tracking for this index
-      _usedSuggestions.remove(index);
-      // Shift down tracking for items after this one
-      final newMap = <int, Set<String>>{};
-      _usedSuggestions.forEach((key, value) {
-        if (key > index) {
-          newMap[key - 1] = value;
-        } else if (key < index) {
-          newMap[key] = value;
-        }
-      });
-      _usedSuggestions.clear();
-      _usedSuggestions.addAll(newMap);
-    });
-  }
-
-  /// Check if item name is generic and needs suggestions
-  bool _isGenericLabel(String name) {
-    final generic = [
-      'mixed vegetables',
-      'vegetable',
-      'vegetables',
-      'food',
-      'food item',
-      'fresh fruit',
-      'fruit',
-      'fruits',
-      'leafy greens',
-      'produce',
-    ];
-    return generic.contains(name.toLowerCase());
-  }
-
-  /// Get smart suggestions based on generic label
-  List<Map<String, String>> _getSuggestionsFor(String genericLabel) {
-    final label = genericLabel.toLowerCase();
-
-    // Vegetables suggestions
-    if (label.contains('vegetable') || label.contains('produce')) {
-      return [
-        {'emoji': '🥕', 'name': 'Carrots'},
-        {'emoji': '🍅', 'name': 'Tomatoes'},
-        {'emoji': '🥬', 'name': 'Cabbage'},
-        {'emoji': '🥒', 'name': 'Cucumber'},
-        {'emoji': '🧅', 'name': 'Onions'},
-        {'emoji': '🫑', 'name': 'Bell Peppers'},
-        {'emoji': '🥦', 'name': 'Broccoli'},
-        {'emoji': '🥔', 'name': 'Potatoes'},
-      ];
-    }
-
-    // Fruits suggestions
-    if (label.contains('fruit')) {
-      return [
-        {'emoji': '🍎', 'name': 'Apples'},
-        {'emoji': '🍊', 'name': 'Oranges'},
-        {'emoji': '🍌', 'name': 'Bananas'},
-        {'emoji': '🍇', 'name': 'Grapes'},
-        {'emoji': '🍓', 'name': 'Strawberries'},
-        {'emoji': '🫐', 'name': 'Blueberries'},
-        {'emoji': '🍋', 'name': 'Lemons'},
-        {'emoji': '🥑', 'name': 'Avocados'},
-      ];
-    }
-
-    // Leafy greens suggestions
-    if (label.contains('leaf') || label.contains('green')) {
-      return [
-        {'emoji': '🥬', 'name': 'Cabbage'},
-        {'emoji': '🥗', 'name': 'Lettuce'},
-        {'emoji': '🌿', 'name': 'Spinach'},
-        {'emoji': '🥬', 'name': 'Kale'},
-        {'emoji': '🌿', 'name': 'Beet Greens'},
-      ];
-    }
-
-    // Generic food suggestions - most common ingredients
-    return [
-      {'emoji': '🥕', 'name': 'Carrots'},
-      {'emoji': '🍅', 'name': 'Tomatoes'},
-      {'emoji': '🥬', 'name': 'Cabbage'},
-      {'emoji': '🧅', 'name': 'Onions'},
-      {'emoji': '🥔', 'name': 'Potatoes'},
-      {'emoji': '🍎', 'name': 'Apples'},
-    ];
-  }
-
-  /// Add specific item from suggestion (allows multiple selections)
-  void _addFromSuggestion(int genericIndex, String itemName) {
-    setState(() {
-      // Add the new specific item
-      _items.insert(
-        genericIndex + 1,
-        DetectedItem(name: itemName, quantity: 1),
-      );
-
-      // Track this suggestion as used for this generic item
-      _usedSuggestions.putIfAbsent(genericIndex, () => {}).add(itemName);
-    });
-
-    // Show feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added $itemName'),
-        duration: const Duration(milliseconds: 800),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.successColor,
-      ),
-    );
-  }
-
-  /// Remove the generic placeholder after adding specific items
-  void _removeGenericPlaceholder(int index) {
-    setState(() {
-      _items.removeAt(index);
-      // Clean up tracking for this index
-      _usedSuggestions.remove(index);
-      // Shift down tracking for items after this one
-      final newMap = <int, Set<String>>{};
-      _usedSuggestions.forEach((key, value) {
-        if (key > index) {
-          newMap[key - 1] = value;
-        } else if (key < index) {
-          newMap[key] = value;
-        }
-      });
-      _usedSuggestions.clear();
-      _usedSuggestions.addAll(newMap);
     });
   }
 
@@ -183,7 +53,7 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
     final authState = ref.read(authProvider);
     final user = authState.user;
 
-    // Block guests from saving scan results - per requirements spec
+    // Block guests from saving scan results
     if (user == null || user.isAnonymous) {
       _showGuestRestrictedDialog();
       return;
@@ -203,7 +73,7 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
                 'quantity': item.quantity,
                 'category': _categorizeIngredient(item.name),
                 'source': 'scanned',
-                'confidence': 0.8, // Default confidence for manual additions
+                'confidence': 0.8,
               },
             )
             .toList(),
@@ -270,7 +140,85 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
     );
   }
 
-  /// Categorize ingredient based on name (simple categorization)
+  Widget _buildAISourceBanner() {
+    if (widget.aiSource == null) return const SizedBox.shrink();
+
+    final source = widget.aiSource!;
+
+    return Container(
+      margin: const EdgeInsets.all(AppTheme.spacingM),
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(source.icon, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: AppTheme.spacingS),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Detected with ${source.displayName}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                    Text(
+                      'High accuracy, cloud-powered',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blue.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingS),
+          Container(
+            padding: const EdgeInsets.all(AppTheme.spacingS),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_note_rounded,
+                  size: 16,
+                  color: Colors.amber.shade700,
+                ),
+                const SizedBox(width: AppTheme.spacingS),
+                Expanded(
+                  child: Text(
+                    'Review and edit detected items before saving',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.amber.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Categorize ingredient based on name
   String _categorizeIngredient(String name) {
     final lowerName = name.toLowerCase();
 
@@ -325,7 +273,7 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text('Detected Items'),
+        title: const Text('Add Items'),
         backgroundColor: AppTheme.surfaceColor,
         elevation: 0,
         centerTitle: true,
@@ -346,12 +294,9 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
       ),
       body: Column(
         children: [
-          // Quota status banner (if available)
-          if (widget.quotaStatus != null) _buildQuotaStatusBanner(),
-          
-          // Vision source indicator (if available)
-          if (widget.visionSource != null) _buildVisionSourceBadge(),
-          
+          // AI Source & Manual Edit Encouragement Banner
+          if (widget.aiSource != null) _buildAISourceBanner(),
+
           Expanded(
             child: _items.isEmpty
                 ? _buildEmptyState()
@@ -384,7 +329,7 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
           ),
           const SizedBox(height: AppTheme.spacingM),
           Text(
-            'No items detected',
+            'No items yet',
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(color: AppTheme.textSecondary),
@@ -398,140 +343,13 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
       ),
     );
   }
-  
-  Widget _buildQuotaStatusBanner() {
-    final status = widget.quotaStatus!;
-    
-    // Only show banner if approaching limits or exhausted
-    if (status.level == QuotaLevel.normal) return const SizedBox.shrink();
-    
-    Color bgColor;
-    Color textColor;
-    IconData icon;
-    
-    switch (status.level) {
-      case QuotaLevel.warning:
-        bgColor = Colors.amber.shade50;
-        textColor = Colors.amber.shade900;
-        icon = Icons.info_outline;
-        break;
-      case QuotaLevel.critical:
-        bgColor = Colors.orange.shade50;
-        textColor = Colors.orange.shade900;
-        icon = Icons.warning_amber_rounded;
-        break;
-      case QuotaLevel.exhausted:
-        bgColor = Colors.red.shade50;
-        textColor = Colors.red.shade900;
-        icon = Icons.error_outline;
-        break;
-      default:
-        return const SizedBox.shrink();
-    }
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingM,
-        vertical: AppTheme.spacingS,
-      ),
-      color: bgColor,
-      child: Row(
-        children: [
-          Icon(icon, color: textColor, size: 20),
-          const SizedBox(width: AppTheme.spacingS),
-          Expanded(
-            child: Text(
-              status.statusMessage,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildVisionSourceBadge() {
-    final source = widget.visionSource!;
-    
-    String label;
-    Color bgColor;
-    Color textColor;
-    IconData icon;
-    
-    switch (source) {
-      case VisionSource.mlKit:
-        label = 'Standard AI Detection';
-        bgColor = Colors.blue.shade50;
-        textColor = Colors.blue.shade900;
-        icon = Icons.smartphone;
-        break;
-      case VisionSource.cloudVision:
-        label = 'Enhanced AI Detection ☁️';
-        bgColor = Colors.purple.shade50;
-        textColor = Colors.purple.shade900;
-        icon = Icons.auto_awesome;
-        break;
-      case VisionSource.mlKitFallback:
-        label = 'Standard AI (Quota Reached)';
-        bgColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade700;
-        icon = Icons.smartphone;
-        break;
-    }
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingM,
-        vertical: AppTheme.spacingXS,
-      ),
-      color: bgColor,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: textColor, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildItemCard(DetectedItem item, int index) {
-    final isGeneric = _isGenericLabel(item.name);
-    final allSuggestions = isGeneric
-        ? _getSuggestionsFor(item.name)
-        : <Map<String, String>>[];
-
-    // Filter out already used suggestions
-    final usedForThisItem = _usedSuggestions[index] ?? {};
-    final suggestions = allSuggestions
-        .where((s) => !usedForThisItem.contains(s['name']))
-        .toList();
-
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: AppTheme.borderRadiusMedium,
         boxShadow: AppTheme.softShadow,
-        border: isGeneric
-            ? Border.all(
-                color: AppTheme.accentColor.withValues(alpha: 0.3),
-                width: 2,
-              )
-            : null,
       ),
       child: Material(
         color: Colors.transparent,
@@ -540,250 +358,50 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
           borderRadius: AppTheme.borderRadiusMedium,
           child: Padding(
             padding: const EdgeInsets.all(AppTheme.spacingM),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isGeneric
-                            ? AppTheme.accentColor.withValues(alpha: 0.2)
-                            : AppTheme.secondaryLight.withValues(alpha: 0.3),
-                        borderRadius: AppTheme.borderRadiusSmall,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          isGeneric
-                              ? Icons.help_outline_rounded
-                              : Icons.restaurant_menu_rounded,
-                          color: isGeneric
-                              ? AppTheme.accentColor
-                              : AppTheme.secondaryDark,
-                        ),
-                      ),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondaryLight.withValues(alpha: 0.3),
+                    borderRadius: AppTheme.borderRadiusSmall,
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.restaurant_menu_rounded,
+                      color: AppTheme.secondaryDark,
                     ),
-                    const SizedBox(width: AppTheme.spacingM),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item.name,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: isGeneric
-                                        ? AppTheme.accentColor
-                                        : AppTheme.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              if (isGeneric)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.accentColor.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text(
-                                    'Generic',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.accentColor,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          Text(
-                            'Quantity: ${item.quantity}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      color: AppTheme.errorColor,
-                      onPressed: () => _removeItem(index),
-                    ),
-                  ],
+                  ),
                 ),
-                if (isGeneric) ...[
-                  const SizedBox(height: AppTheme.spacingM),
-                  const Divider(height: 1),
-                  const SizedBox(height: AppTheme.spacingM),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const SizedBox(width: AppTheme.spacingM),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Tap to add items:',
-                        style: TextStyle(
-                          fontSize: 12,
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.textSecondary,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => _removeGenericPlaceholder(index),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Remove placeholder',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.errorColor,
-                          ),
+                      Text(
+                        'Quantity: ${item.quantity}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppTheme.spacingS),
-                  suggestions.isEmpty
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.successColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppTheme.successColor.withValues(
-                                alpha: 0.3,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle_outline,
-                                size: 16,
-                                color: AppTheme.successColor,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'All items added! Remove placeholder to continue.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.successColor,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: suggestions.map((suggestion) {
-                            return InkWell(
-                              onTap: () => _addFromSuggestion(
-                                index,
-                                suggestion['name']!,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor.withValues(
-                                    alpha: 0.1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppTheme.primaryColor.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.add_circle_outline,
-                                      size: 16,
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      suggestion['emoji']!,
-                                      style: const TextStyle(fontSize: 16),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      suggestion['name']!,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                  const SizedBox(height: AppTheme.spacingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.touch_app_rounded,
-                          size: 14,
-                          color: AppTheme.primaryColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Select multiple items from your scan',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  color: AppTheme.errorColor,
+                  onPressed: () => _removeItem(index),
+                ),
               ],
             ),
           ),
@@ -811,7 +429,7 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
           child: ElevatedButton.icon(
             onPressed: _showAddManualItemDialog,
             icon: const Icon(Icons.add_rounded),
-            label: const Text('Add Manually'),
+            label: const Text('Add Item'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
@@ -828,17 +446,33 @@ class _ScanResultsScreenState extends ConsumerState<ScanResultsScreen> {
   }
 
   Future<void> _showAddManualItemDialog() async {
-    await showDialog(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) => _ItemDialog(
-        title: 'Add Item',
-        actionLabel: 'Add',
-        onConfirm: (name, quantity) {
-          setState(() {
-            _items.add(DetectedItem(name: name, quantity: quantity));
-          });
-        },
+      isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (sheetContext) {
+        return PantryCategorySelector(
+          // We pass empty because we are adding *new* items to a scan result,
+          // not editing an existing pantry.
+          existingPantryItems: const [],
+          onApply: (toAdd, toRemove, categoryMap) {
+            // In scan results, we only care about adding new items to the list
+            final newItems = toAdd
+                .map((name) => DetectedItem(name: name))
+                .toList();
+
+            setState(() {
+              _items.addAll(newItems);
+            });
+            Navigator.pop(context);
+          },
+        );
+      },
     );
   }
 

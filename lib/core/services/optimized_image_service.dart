@@ -94,7 +94,7 @@ class OptimizedImageService {
       try {
         await precacheImage(CachedNetworkImageProvider(url), context);
       } catch (e) {
-        debugPrint('Failed to precache image: $url, Error: $e');
+  // debugPrint('Failed to precache image: $url, Error: $e');
       }
     }
   }
@@ -104,7 +104,7 @@ class OptimizedImageService {
   /// Useful for memory management or when user signs out
   Future<void> clearCache() async {
     await CachedNetworkImage.evictFromCache('');
-    debugPrint('Image cache cleared');
+  // debugPrint('Image cache cleared');
   }
 
   /// Clear specific image from cache

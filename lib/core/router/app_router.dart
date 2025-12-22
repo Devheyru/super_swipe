@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:super_swipe/core/providers/app_state_provider.dart';
+import 'package:super_swipe/core/services/hybrid_vision_service.dart';
+import 'package:super_swipe/core/services/quota_service.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 import 'package:super_swipe/features/auth/screens/login_screen.dart';
 import 'package:super_swipe/features/auth/screens/signup_screen.dart';
@@ -10,10 +12,12 @@ import 'package:super_swipe/features/onboarding/screens/onboarding_screen.dart';
 import 'package:super_swipe/features/pantry/screens/pantry_screen.dart';
 import 'package:super_swipe/features/profile/screens/profile_screen.dart';
 import 'package:super_swipe/features/recipes/screens/recipes_screen.dart';
+import 'package:super_swipe/features/recipes/screens/recipe_detail_screen.dart';
 import 'package:super_swipe/features/scan/screens/scan_screen.dart';
 import 'package:super_swipe/features/scan/screens/scan_results_screen.dart';
 import 'package:super_swipe/features/shell/main_wrapper.dart';
 import 'package:super_swipe/features/swipe/screens/swipe_screen.dart';
+import 'package:super_swipe/core/models/recipe.dart';
 
 /// Route names
 class AppRoutes {
@@ -25,6 +29,7 @@ class AppRoutes {
   static const String pantry = '/pantry';
   static const String scan = '/scan';
   static const String recipes = '/recipes';
+  static const String recipeDetail = '/recipes/:recipeId';
   static const String profile = '/profile';
   static const String swipe = '/swipe';
   static const String scanResults = 'results';
@@ -106,6 +111,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'swipe',
         builder: (context, state) => const SwipeScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.recipeDetail,
+        name: 'recipeDetail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final recipeId = state.pathParameters['recipeId'] ?? '';
+          final extra = state.extra;
+          return RecipeDetailScreen(
+            recipeId: recipeId,
+            initialRecipe: extra is Recipe ? extra : null,
+          );
+        },
+      ),
 
       // Protected routes with bottom navigation
       ShellRoute(
@@ -135,16 +153,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'scanResults',
                 parentNavigatorKey: _rootNavigatorKey,
                 builder: (context, state) {
-                  // Handle both old format (List<String>) and new format (Map)
+                  // Handle both Map and List formats
                   if (state.extra is Map) {
                     final data = state.extra as Map;
                     return ScanResultsScreen(
                       detectedItems: data['labels'] as List<String>? ?? [],
-                      quotaStatus: data['quotaStatus'],
-                      visionSource: data['visionSource'],
+                      aiSource: data['aiSource'] as AISource?,
+                      quotaStatus: data['quotaStatus'] as QuotaStatus?,
                     );
                   } else {
-                    // Backward compatibility
                     final items = state.extra as List<String>? ?? [];
                     return ScanResultsScreen(detectedItems: items);
                   }

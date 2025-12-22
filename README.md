@@ -15,7 +15,7 @@ Super Swipe is a mobile application that revolutionizes meal planning by combini
 ### 🔥 Core Features
 - **Tinder-Style Swiping** - Swipe right to unlock recipes, left to skip
 - **Carrot System** - Gamified weekly unlocks (5 free carrots/week)
-- **ML-Powered Scanning** - Camera detection of pantry ingredients (85-90% accuracy)
+- **Hybrid AI Vision** - Smart food detection combining ML Kit and Google Cloud Vision with cost controls
 - **Real-time Sync** - Firestore backend with cross-device synchronization
 - **Smart Pantry Management** - Add, edit, delete ingredients with real-time updates
 
@@ -58,7 +58,7 @@ Super Swipe is a mobile application that revolutionizes meal planning by combini
 - **Database**: Cloud Firestore
 - **Authentication**: Firebase Auth
 - **Storage**: Firebase Cloud Storage (ready)
-- **ML**: Google ML Kit Image Labeling
+- **AI Vision**: Hybrid (ML Kit + Google Cloud Vision API)
 
 ### **Key Packages**
 ```yaml
@@ -67,9 +67,11 @@ firebase_auth: ^5.3.1
 cloud_firestore: ^5.6.12
 flutter_riverpod: ^2.5.1
 go_router: ^14.3.0
-google_mlkit_image_labeling: ^0.14.1
+google_mlkit_image_labeling: ^0.14.0
+google_mlkit_object_detection: ^0.15.0
 cached_network_image: ^3.4.1
 appinio_swiper: ^2.1.1
+http: ^1.2.2
 ```
 
 ---
@@ -157,6 +159,9 @@ lib/
 Create a `.env` file in the root directory:
 
 ```env
+# Google Cloud Vision API
+GOOGLE_VISION_API_KEY=your_google_cloud_vision_key_here
+
 # OpenAI API (for Milestone 4)
 OPENAI_API_KEY=your_openai_key_here
 
@@ -176,7 +181,7 @@ users/{userId}
   ├── preferences: { dietaryRestrictions, allergies }
   ├── pantry/{itemId}
   │     ├── name, category, quantity
-  │     ├── source (manual/scanned)
+  │     ├── source (manual/scanned/ml-kit/cloud-vision)
   │     └── timestamps
   └── savedRecipes/{recipeId}
         ├── recipeId, title, imageUrl
@@ -188,6 +193,17 @@ recipes/{recipeId}
   ├── energyLevel (0-3)
   ├── calories, timeMinutes
   └── dietaryTags
+
+user_quotas/{userId}
+  ├── dailyLimit, monthlyLimit
+  ├── isPremium
+  └── timestamps
+
+vision_usage/{usageId}
+  ├── userId, usedCloudVision
+  ├── itemsDetected, averageConfidence
+  ├── processingTimeMs, cost
+  └── timestamp
 ```
 
 ---
@@ -223,7 +239,8 @@ flutter test test/services/recipe_service_test.dart
 ### ✅ Completed (Milestones 1-3)
 - [x] UI/UX & Authentication
 - [x] Pantry Management System
-- [x] ML-Powered Camera Scanning
+- [x] Hybrid AI Vision System (ML Kit + Cloud Vision)
+- [x] Cost-Controlled Cloud Vision Quota System
 - [x] Real-time Firestore Integration
 - [x] Tinder-Style Swiping
 - [x] Carrot Gamification System
@@ -240,6 +257,29 @@ flutter test test/services/recipe_service_test.dart
 - [ ] Advanced Analytics
 - [ ] Social Features
 - [ ] App Store Deployment
+
+---
+
+## 🤖 Hybrid AI Vision System
+
+### Smart Detection Strategy
+- **ML Kit First**: Fast, free on-device processing for simple scans
+- **Cloud Vision Upgrade**: High-accuracy API used selectively when:
+  - 1 item detected with confidence < 50%
+  - 2-3 items detected with confidence < 80%
+  - 4+ items detected (complex scenes)
+
+### Cost Controls
+- **Free Users**: 10 Cloud Vision requests per day
+- **Premium Users**: 50 requests per day
+- **Graceful Degradation**: ML Kit fallback when quota reached
+- **Usage Tracking**: Real-time quota monitoring and analytics
+
+### Enhanced Accuracy
+- **Advanced Filtering**: Removes non-food items and generic labels
+- **Smart Normalization**: Consolidates similar food items
+- **Quantity Detection**: Accurate multi-item counting with position deduplication
+- **Manual Editing**: Users can always refine results
 
 ---
 

@@ -148,6 +148,19 @@ Thumbs.db
 *.backup
 *.old
 
+# Documentation (except README and SYSTEM_DOCUMENTATION)
+HYBRID_VISION_IMPLEMENTATION.md
+HYBRID_VISION_SUMMARY.md
+ACCURACY_OPTIMIZATION_UPDATE.md
+GRADUATED_LOGIC_UPDATE.md
+QUANTITY_ACCURACY_IMPROVEMENTS.md
+QUOTA_SYSTEM_IMPLEMENTATION.md
+DATABASE_VERIFICATION_REPORT.md
+*_REPORT.md
+*_GUIDE.md
+*_SUMMARY.md
+*_UPDATE.md
+
 # Firebase Emulator Data (if using Firebase Emulator)
 firebase-debug.*.log
 firestore-debug.log

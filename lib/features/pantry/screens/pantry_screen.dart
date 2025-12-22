@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:super_swipe/core/models/pantry_item.dart';
 import 'package:super_swipe/core/providers/user_data_providers.dart';
 import 'package:super_swipe/core/providers/firestore_providers.dart';
+import 'package:super_swipe/core/services/pantry_service.dart';
 import 'package:super_swipe/features/auth/providers/auth_provider.dart';
 import 'package:super_swipe/core/router/app_router.dart';
 import 'package:super_swipe/core/theme/app_theme.dart';
+import 'package:super_swipe/core/config/pantry_constants.dart';
+import 'package:super_swipe/features/pantry/widgets/pantry_category_selector.dart';
 
 class PantryScreen extends ConsumerStatefulWidget {
   const PantryScreen({super.key});
@@ -16,7 +21,7 @@ class PantryScreen extends ConsumerStatefulWidget {
 
 class _PantryScreenState extends ConsumerState<PantryScreen> {
   String _searchQuery = '';
-  bool _isSubmitting = false; // Fix #14: Prevent double-submission
+  bool _showDepleted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -46,28 +51,29 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
       ),
       error: (error, stack) => _buildErrorScreen(context, error, stack),
       data: (allItems) {
-        final filtered = allItems
-            .where(
-              (item) =>
-                  item.name.toLowerCase().contains(_searchQuery.toLowerCase()),
-            )
-            .toList();
-
+        final filtered = allItems.where((item) {
+          if (!_showDepleted && item.quantity <= 0) return false;
+          return item.name.toLowerCase().contains(_searchQuery.toLowerCase());
+        }).toList();
         return _buildScreen(context, authState, filtered);
       },
     );
   }
 
-  Widget _buildScreen(BuildContext context, authState, filtered) {
+  Widget _buildScreen(
+    BuildContext context,
+    authState,
+    List<PantryItem> filtered,
+  ) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           if (_requireAuth() || _isGuest()) return;
-          _showAddEditDialog();
+          _showIngredientSelector();
         },
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Ingredients'),
+        icon: const Icon(Icons.playlist_add_rounded),
+        label: const Text('Add'),
         elevation: 4,
         backgroundColor: AppTheme.primaryColor,
       ),
@@ -153,6 +159,19 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                       ],
                     ),
                     const SizedBox(height: AppTheme.spacingM),
+                    Row(
+                      children: [
+                        Switch(
+                          value: _showDepleted,
+                          onChanged: (v) => setState(() => _showDepleted = v),
+                          activeColor: AppTheme.primaryColor,
+                        ),
+                        const Text(
+                          'Show depleted items',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -167,34 +186,27 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   return Dismissible(
                     key: Key(item.id),
                     direction: DismissDirection.endToStart,
-
-                    /// Fix #11: Proper error handling to prevent UI/Firestore desync
                     confirmDismiss: (_) async {
                       if (_requireAuth() || _isGuest()) return false;
-
                       final authState = ref.read(authProvider);
                       if (authState.user == null) return false;
-
                       try {
                         final pantryService = ref.read(pantryServiceProvider);
                         await pantryService.deletePantryItem(
                           authState.user!.uid,
                           item.id,
                         );
-                        return true; // Allow dismissal only after successful delete
+                        return true;
                       } catch (e) {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(
-                                'Failed to delete: ${e.toString()}',
-                              ),
+                              content: Text('Failed to delete: $e'),
                               backgroundColor: Colors.red,
-                              duration: const Duration(seconds: 3),
                             ),
                           );
                         }
-                        return false; // Prevent dismissal on error
+                        return false;
                       }
                     },
                     background: Container(
@@ -209,11 +221,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                     child: InkWell(
                       onTap: () {
                         if (_requireAuth() || _isGuest()) return;
-                        _showAddEditDialog(
-                          itemId: item.id,
-                          initialName: item.name,
-                          initialQuantity: item.quantity,
-                        );
+                        _showQuantityEditor(item);
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -318,110 +326,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
     );
   }
 
-  Future<void> _showAddEditDialog({
-    String? itemId,
-    String initialName = '',
-    int initialQuantity = 1,
-  }) async {
-    final nameController = TextEditingController(text: initialName);
-    final qtyController = TextEditingController(
-      text: initialQuantity.toString(),
-    );
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(itemId == null ? 'Add Ingredient' : 'Edit Ingredient'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: AppTheme.spacingXL),
-            TextField(
-              controller: qtyController,
-              decoration: const InputDecoration(labelText: 'Quantity'),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _isSubmitting
-                ? null
-                : () async {
-                    if (_isSubmitting) {
-                      return;
-                    } // Fix #14: Prevent double-submission
-
-                    final name = nameController.text.trim();
-                    final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-                    if (name.isEmpty) return;
-                    if (_requireAuth() || _isGuest()) return;
-
-                    final authState = ref.read(authProvider);
-                    if (authState.user == null) return;
-
-                    setState(() => _isSubmitting = true);
-
-                    final pantryService = ref.read(pantryServiceProvider);
-
-                    try {
-                      if (itemId == null) {
-                        // Add new item
-                        await pantryService.addPantryItem(
-                          authState.user!.uid,
-                          name,
-                          quantity: qty,
-                          category: 'other',
-                          source: 'manual',
-                        );
-                      } else {
-                        // Edit existing item
-                        await pantryService.updatePantryItem(
-                          authState.user!.uid,
-                          itemId,
-                          name: name,
-                          quantity: qty,
-                        );
-                      }
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                      }
-                    } finally {
-                      if (mounted) {
-                        setState(() => _isSubmitting = false);
-                      }
-                    }
-                  },
-            child: _isSubmitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
   bool _requireAuth() {
     final authState = ref.read(authProvider);
     if (authState.user == null) {
@@ -459,11 +363,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
           title: const Text('Guest Mode Restriction'),
           content: const Text(
             'Guest users can view the pantry but cannot save changes.\n\n'
-            'Create a free account to:\n'
-            '• Save your pantry inventory\n'
-            '• Get personalized recipe suggestions\n'
-            '• Track your cooking progress\n\n'
-            'Sign up now?',
+            'Create a free account to:\n• Save your pantry inventory\n• Get personalized recipe suggestions\n• Track your cooking progress\n\nSign up now?',
           ),
           actions: [
             TextButton(
@@ -508,7 +408,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
       icon = Icons.eco_outlined;
       color = Colors.green;
     }
-
     return Container(
       width: 48,
       height: 48,
@@ -520,15 +419,232 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
     );
   }
 
-  /// Expert-level error handling with user-friendly messages
+  Future<void> _showQuantityEditor(PantryItem item) async {
+    if (_requireAuth() || _isGuest()) return;
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+
+    int qty = item.quantity;
+    bool isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(item.name),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Update quantity'),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: isSaving
+                            ? null
+                            : () => setDialogState(
+                                () => qty = (qty - 1).clamp(0, 9999),
+                              ),
+                        icon: const Icon(Icons.remove_circle_outline_rounded),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: isSaving
+                            ? null
+                            : () => setDialogState(
+                                () => qty = (qty + 1).clamp(0, 9999),
+                              ),
+                        icon: const Icon(Icons.add_circle_outline_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (qty == 0)
+                    const Text(
+                      'Quantity 0 will hide this item unless "Show depleted items" is enabled.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() => isSaving = true);
+                          try {
+                            await ref
+                                .read(pantryServiceProvider)
+                                .updatePantryItem(
+                                  user.uid,
+                                  item.id,
+                                  quantity: qty,
+                                );
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to update: $e'),
+                                  backgroundColor: AppTheme.errorColor,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showIngredientSelector() async {
+    if (_requireAuth() || _isGuest()) return;
+    final authState = ref.read(authProvider);
+    final user = authState.user;
+    if (user == null) return;
+
+    final pantryItems =
+        ref.read(pantryItemsProvider).value ?? const <PantryItem>[];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return PantryCategorySelector(
+          existingPantryItems: pantryItems,
+          onApply: (toAdd, toRemove, categoryMap) async {
+            try {
+              // We need to read the providers from the parent context,
+              // or ensure the sheet has access to them.
+              // Since we are in a closure, we can capture 'ref' from valid scope if this is ConsumerState.
+              // Using 'ref.read' here is fine as long as we are in ConsumerState.
+              final pantryService = ref.read(pantryServiceProvider);
+              final userId = user.uid;
+
+              // Handle Removals
+              for (final key in toRemove) {
+                final normKey = key.toLowerCase().trim();
+                final itemsToDelete = pantryItems.where(
+                  (i) =>
+                      i.normalizedName.toLowerCase().trim() == normKey &&
+                      i.quantity > 0,
+                );
+                for (final item in itemsToDelete) {
+                  await pantryService.deletePantryItem(userId, item.id);
+                }
+              }
+
+              // Handle Adds
+              final batchPayload = <Map<String, dynamic>>[];
+              for (final key in toAdd) {
+                final normKey = key.toLowerCase().trim();
+                final depletedItem = pantryItems
+                    .where(
+                      (i) =>
+                          i.normalizedName.toLowerCase().trim() == normKey &&
+                          i.quantity == 0,
+                    )
+                    .firstOrNull;
+
+                if (depletedItem != null) {
+                  await pantryService.updatePantryItem(
+                    userId,
+                    depletedItem.id,
+                    name: key, // Keep original casing logic or map if available
+                    category: categoryMap[key] ?? 'other',
+                    quantity: 1,
+                  );
+                } else {
+                  batchPayload.add({
+                    'name': key,
+                    'quantity': 1,
+                    'category': categoryMap[key] ?? 'other',
+                    'source': 'manual',
+                  });
+                }
+              }
+
+              if (batchPayload.isNotEmpty) {
+                await pantryService.batchAddPantryItems(userId, batchPayload);
+              }
+
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Updated pantry (+${toAdd.length}, -${toRemove.length})',
+                    ),
+                    backgroundColor: AppTheme.successColor,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to apply changes: $e'),
+                    backgroundColor: AppTheme.errorColor,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildErrorScreen(
     BuildContext context,
     Object error,
     StackTrace stack,
   ) {
-    // Parse error to determine specific issue
     final errorString = error.toString().toLowerCase();
-
     String title;
     String message;
     IconData icon;
@@ -538,79 +654,46 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
 
     if (errorString.contains('failed-precondition') ||
         errorString.contains('index')) {
-      // Missing Firestore Index Error
       title = 'Database Setup Required';
       message =
-          'Your pantry needs a database index to organize items by category.\n\n'
-          'This is a one-time setup that takes 2-3 minutes to complete.';
+          'Your pantry needs a database index to organize items by category.\n\nThis is a one-time setup that takes 2-3 minutes to complete.';
       icon = Icons.construction_rounded;
       iconColor = Colors.orange;
       actionText = 'Create Index in Firebase';
-
-      // Extract the index creation URL from error
       final urlMatch = RegExp(r'https://[^\s]+').firstMatch(errorString);
       if (urlMatch != null) {
         final url = urlMatch.group(0)!;
         onAction = () async {
-          // Try to open URL
+          await Clipboard.setData(ClipboardData(text: url));
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Opening Firebase Console...'),
-              action: SnackBarAction(
-                label: 'Copy URL',
-                onPressed: () {
-                  // In a real app, you'd copy to clipboard
-                  debugPrint('Index URL: $url');
-                },
-              ),
-            ),
+            SnackBar(content: const Text('Index URL copied to clipboard.')),
           );
-          debugPrint('Create index at: $url');
         };
       }
     } else if (errorString.contains('permission') ||
         errorString.contains('denied')) {
-      // Permission Error
       title = 'Access Denied';
-      message =
-          'You don\'t have permission to access the pantry.\n\n'
-          'This usually means:\n'
-          '• Security rules aren\'t deployed yet\n'
-          '• You need to sign in again\n'
-          '• Your account needs verification';
+      message = 'You don\'t have permission to access the pantry.';
       icon = Icons.lock_rounded;
       iconColor = Colors.red;
       actionText = 'Sign In Again';
-      onAction = () {
-        context.go(AppRoutes.login);
-      };
+      onAction = () => context.go(AppRoutes.login);
     } else if (errorString.contains('network') ||
         errorString.contains('unavailable')) {
-      // Network Error
       title = 'Connection Issue';
       message =
-          'Can\'t connect to the database.\n\n'
-          'Please check your internet connection and try again.';
+          'Can\'t connect to the database.\n\nPlease check your internet connection and try again.';
       icon = Icons.wifi_off_rounded;
       iconColor = Colors.grey;
       actionText = 'Retry';
-      onAction = () {
-        setState(() {
-          // Trigger rebuild which will retry provider
-        });
-      };
+      onAction = () => setState(() {});
     } else {
-      // Unknown Error
       title = 'Something Went Wrong';
-      message =
-          'We encountered an unexpected error while loading your pantry.\n\n'
-          'Error details: ${error.toString().substring(0, error.toString().length > 100 ? 100 : error.toString().length)}...';
+      message = 'We encountered an unexpected error while loading your pantry.';
       icon = Icons.error_outline_rounded;
       iconColor = Colors.deepOrange;
       actionText = 'Go Back';
-      onAction = () {
-        context.go(AppRoutes.home);
-      };
+      onAction = () => context.go(AppRoutes.home);
     }
 
     return Scaffold(
@@ -627,7 +710,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Error Icon
                 Container(
                   width: 100,
                   height: 100,
@@ -638,8 +720,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   child: Icon(icon, size: 50, color: iconColor),
                 ),
                 const SizedBox(height: 32),
-
-                // Error Title
                 Text(
                   title,
                   style: const TextStyle(
@@ -650,8 +730,6 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-
-                // Error Message
                 Text(
                   message,
                   style: const TextStyle(
@@ -662,68 +740,28 @@ class _PantryScreenState extends ConsumerState<PantryScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-
-                // Action Buttons
-                Column(
-                  children: [
-                    if (onAction != null)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: onAction,
-                          icon: Icon(
-                            errorString.contains('index')
-                                ? Icons.open_in_new
-                                : Icons.refresh,
-                          ),
-                          label: Text(actionText),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
+                if (onAction != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: onAction,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(actionText),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () {
-                        context.go(AppRoutes.home);
-                      },
-                      icon: const Icon(Icons.home),
-                      label: const Text('Go to Home'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppTheme.textSecondary,
-                      ),
                     ),
-                  ],
-                ),
-
-                // Technical Details (Expandable)
-                const SizedBox(height: 32),
-                ExpansionTile(
-                  title: const Text(
-                    'Technical Details',
-                    style: TextStyle(fontSize: 14, color: AppTheme.textLight),
                   ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SelectableText(
-                        error.toString(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () => context.go(AppRoutes.home),
+                  icon: const Icon(Icons.home),
+                  label: const Text('Go to Home'),
                 ),
               ],
             ),

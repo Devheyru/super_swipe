@@ -84,7 +84,7 @@ class AppStateNotifier extends Notifier<AppState> {
           const [], // Pantry items loaded from Firestore via pantryItemsProvider
       isGuest: isGuest,
       hasSeenWelcome: false,
-      filterExpanded: true,
+      filterExpanded: false,
       skipUnlockReminder: false,
     );
   }
@@ -92,7 +92,7 @@ class AppStateNotifier extends Notifier<AppState> {
   Future<void> _loadPersistedFlags() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool(_welcomeKey) ?? false;
-    final expanded = prefs.getBool(_filterExpandedKey) ?? true;
+    final expanded = prefs.getBool(_filterExpandedKey) ?? false;
     final skipReminder = prefs.getBool(_skipUnlockReminderKey) ?? false;
 
     // Carrot Economy Logic

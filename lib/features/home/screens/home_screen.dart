@@ -48,6 +48,9 @@ class HomeScreen extends ConsumerWidget {
             final scanCount = userProfile.stats.scanCount;
             final recipesUnlocked = userProfile.stats.recipesUnlocked;
             final totalCarrotsSpent = userProfile.stats.totalCarrotsSpent;
+            final subscription = userProfile.subscriptionStatus.toLowerCase();
+            final isPremium =
+                subscription == 'premium' || subscription == 'pro';
 
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 28.0),
@@ -80,7 +83,7 @@ class HomeScreen extends ConsumerWidget {
 
                   const SizedBox(height: 32),
 
-                  // 2. Start Swiping Button
+                  // 2. Swipe for Supper Button
                   SizedBox(
                     width: double.infinity,
                     height: 64,
@@ -95,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
                       child: const Text(
-                        'Start Swiping',
+                        'Swipe for Supper',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -123,10 +126,27 @@ class HomeScreen extends ConsumerWidget {
                   savedRecipesAsync.when(
                     data: (recipes) {
                       if (recipes.isEmpty) return const SizedBox.shrink();
-                      final latestRecipe = recipes.first;
+
+                      // Treat a recipe as “in progress” if it has steps and user has started.
+                      final inProgress = recipes.firstWhere(
+                        (r) =>
+                            r.instructions.isNotEmpty &&
+                            r.currentStep > 0 &&
+                            r.currentStep < r.instructions.length,
+                        orElse: () => recipes.first,
+                      );
+
+                      final isActuallyInProgress =
+                          inProgress.instructions.isNotEmpty &&
+                          inProgress.currentStep > 0 &&
+                          inProgress.currentStep <
+                              inProgress.instructions.length;
+
+                      if (!isActuallyInProgress) return const SizedBox.shrink();
+
                       return Column(
                         children: [
-                          _buildContinueRecipeCard(context, latestRecipe),
+                          _buildContinueRecipeCard(context, inProgress),
                           const SizedBox(height: 32),
                         ],
                       );
@@ -210,26 +230,80 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Fix #10: Cap carrot display to prevent overflow with premium users
-                  _buildCarrotDisplay(carrotCount, maxCarrots),
-                  const SizedBox(height: 12),
-                  Text(
-                    '$carrotCount of $maxCarrots unlocks remaining this week',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
+                  if (!isPremium) ...[
+                    // Free users: 5 carrots/week + upsell placeholder
+                    _buildCarrotDisplay(carrotCount, maxCarrots),
+                    const SizedBox(height: 12),
+                    Text(
+                      '$carrotCount of $maxCarrots unlocks remaining this week ',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Unlimited unlocks with Premium',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.star_rounded, color: Colors.orange),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Upgrade to Premium for unlimited unlocks (no carrot limit).',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Premium upgrade coming soon.'),
+                                ),
+                              );
+                            },
+                            child: const Text('Learn More'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    // Premium users: unlimited unlocks (no carrot UX)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('⭐', style: TextStyle(fontSize: 20)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Premium: Unlimited unlocks • $recipesUnlocked unlocked',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 40),
 
@@ -432,6 +506,10 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildContinueRecipeCard(BuildContext context, recipe) {
+    // `recipe` comes from Firestore saved recipes stream.
+    // It should be a `Recipe`, but keep this defensive for legacy data.
+    final int currentStep = (recipe.currentStep as int?) ?? 0;
+    final int totalSteps = (recipe.instructions as List?)?.length ?? 0;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -532,6 +610,17 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(width: 16),
                     Icon(
+                      Icons.format_list_numbered_rounded,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Step $currentStep/$totalSteps',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(width: 16),
+                    Icon(
                       Icons.local_fire_department_rounded,
                       size: 16,
                       color: Colors.grey[600],
@@ -547,9 +636,12 @@ class HomeScreen extends ConsumerWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => context.go(AppRoutes.recipes),
+                    onPressed: () => context.push(
+                      '${AppRoutes.recipes}/${recipe.id}',
+                      extra: recipe,
+                    ),
                     icon: const Icon(Icons.arrow_forward_rounded),
-                    label: const Text('View Recipe'),
+                    label: const Text('Continue Recipe'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,

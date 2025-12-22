@@ -10,17 +10,10 @@ class RecipeService {
 
   /// Save a recipe to user's saved recipes
   Future<void> saveRecipe(String userId, Recipe recipe) async {
-    await _firestoreService.userSavedRecipes(userId).doc(recipe.id).set({
-      'recipeId': recipe.id,
-      'title': recipe.title,
-      'imageUrl': recipe.imageUrl,
-      'cookTime': recipe.cookTime ?? '${recipe.timeMinutes} min',
-      'servings': recipe.servings ?? '${recipe.timeMinutes ~/ 20} servings',
-      'difficulty': recipe.difficulty ?? 'Medium',
-      'calories': recipe.calories,
-      'titleLowercase': recipe.title.toLowerCase(),
-      'savedAt': FieldValue.serverTimestamp(),
-    });
+    await _firestoreService
+        .userSavedRecipes(userId)
+        .doc(recipe.id)
+        .set(recipe.toSavedRecipeFirestore());
   }
 
   /// Get all saved recipes for a user (one-time fetch)
@@ -56,6 +49,18 @@ class RecipeService {
         .doc(recipeId)
         .get();
     return doc.exists;
+  }
+
+  /// Update saved-recipe step progress (step number last reached).
+  Future<void> updateSavedRecipeProgress({
+    required String userId,
+    required String recipeId,
+    required int currentStep,
+  }) async {
+    await _firestoreService.userSavedRecipes(userId).doc(recipeId).update({
+      'currentStep': currentStep,
+      'lastStepAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Add recipe to history

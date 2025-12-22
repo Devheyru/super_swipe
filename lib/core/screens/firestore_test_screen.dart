@@ -209,9 +209,9 @@ class FirestoreTestScreen extends ConsumerWidget {
         source: 'manual',
       );
 
-      debugPrint('✅ Test pantry item added successfully!');
+  // debugPrint('✅ Test pantry item added successfully!');
     } catch (e) {
-      debugPrint('❌ Error adding test item: $e');
+  // debugPrint('❌ Error adding test item: $e');
     }
   }
 }
