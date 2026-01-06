@@ -1,0 +1,148 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // HELPER FUNCTIONS
+    // ==========================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Check for Premium status via the user document
+    function isPremium() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'premium';
+    }
+    
+    // Check if a recipe is in the user's saved/unlocked sub-collection
+    function hasUnlockedRecipe(recipeId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)/savedRecipes/$(recipeId));
+    }
+
+    // ==========================================
+    // USER PROFILES & SUB-COLLECTIONS
+    // ==========================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      
+      // CRITICAL: Prevent users from manually increasing their own carrots
+      // Exception: Premium users bypass carrot restrictions
+      allow update: if isOwner(userId) && (
+        isPremium() ||
+        request.resource.data.carrots.current <= resource.data.carrots.current
+      );
+
+      // ----------------------------------------
+      // PANTRY - Owner full access
+      // ----------------------------------------
+      match /pantry/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ----------------------------------------
+      // SAVED RECIPES - Owner full access
+      // ----------------------------------------
+      match /savedRecipes/{recipeId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ----------------------------------------
+      // TRANSACTIONS - Create/Read only (IMMUTABLE LEDGER)
+      // ----------------------------------------
+      match /transactions/{txId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update, delete: if false; 
+      }
+
+      // ----------------------------------------
+      // PANTRY LOGS - Create/Read only (IMMUTABLE AUDIT)
+      // MUST be defined BEFORE the wildcard catch-all
+      // ----------------------------------------
+      match /pantry_logs/{logId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+      
+      // ----------------------------------------
+      // CATCH-ALL for other sub-collections
+      // (meal_plans, shopping_lists, recipeHistory)
+      // ----------------------------------------
+      match /{allSubcollections=**} {
+         allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ==========================================
+    // RECIPES & SECRETS
+    // ==========================================
+    
+    match /recipes/{recipeId} {
+      // Visibility-based read: Guests can see public recipes
+      allow read: if resource.data.visibility == 'public' || isSignedIn();
+      allow write: if false; // Only Admin/Backend
+    }
+
+    match /recipe_secrets/{recipeId} {
+      // The "Paywall" logic - enforces Split Collection Pattern
+      allow read: if isSignedIn() && (isPremium() || hasUnlockedRecipe(recipeId));
+      allow write: if false;
+    }
+
+    // ==========================================
+    // AI & INFRASTRUCTURE
+    // ==========================================
+    
+    match /ai_recipe_requests/{requestId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /ingredients/{ingredientId} {
+      allow read: if isSignedIn(); // Public master list
+      allow write: if false;
+    }
+
+    match /user_quotas/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    match /vision_usage/{usageId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ==========================================
+    // SOCIAL FEATURES
+    // ==========================================
+    
+    match /social_likes/{likeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /user_follows/{followId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.followerId == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

@@ -1,0 +1,361 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pantry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "normalizedName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pantry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pantry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "energyLevel",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mealType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "flavorProfile",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "prepTags",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "equipment",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dietaryTags",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "energyLevel",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timeTier",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stats.popularityScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "savedRecipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "savedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recipeHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pantry_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vision_usage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vision_usage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usedCloudVision",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ai_recipe_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "meal_plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mealType",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
