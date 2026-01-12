@@ -472,7 +472,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
           });
       });
 
-          _storeDeckCache(deckKeys, generatedRecipes);
+      _storeDeckCache(deckKeys, generatedRecipes);
 
       if (userId != null && persistPreviews.isNotEmpty) {
         unawaited(
