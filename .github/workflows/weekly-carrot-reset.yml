@@ -3,13 +3,13 @@ name: Weekly Carrot Reset
 on:
   schedule:
     # Monday 00:00 UTC
-    - cron: '0 0 * * 1'
+    - cron: "0 0 * * 1"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'If true, do not write to Firestore'
+        description: "If true, do not write to Firestore"
         required: false
-        default: 'false'
+        default: "false"
 
 jobs:
   reset:

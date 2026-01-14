@@ -28,9 +28,9 @@ These scripts do **not** print secret values.
 
 `FIREBASE_SERVICE_ACCOUNT_JSON` cannot be derived from `.env`.
 
-1) In Firebase Console → Project settings → Service accounts → **Generate new private key**
-2) Download the JSON file
-3) Set the secret:
+1. In Firebase Console → Project settings → Service accounts → **Generate new private key**
+2. Download the JSON file
+3. Set the secret:
 
 - Bash: `./scripts/weekly_carrot_reset/set_github_secrets_from_env.sh path/to/service-account.json`
 - PowerShell: `./scripts/weekly_carrot_reset/set_github_secrets_from_env.ps1 -ServiceAccountJsonPath path\\to\\service-account.json`

@@ -394,7 +394,7 @@ class _SwipeScreenState extends ConsumerState<SwipeScreen> {
       final carrotsObj = profile?.carrots;
       final maxCarrots = carrotsObj?.max ?? 5;
       final currentCarrots = carrotsObj?.current ?? 0;
-        final availableCarrots = currentCarrots;
+      final availableCarrots = currentCarrots;
 
       if (!mounted) return;
 

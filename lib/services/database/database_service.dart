@@ -132,8 +132,8 @@ class DatabaseService {
           userData['subscriptionStatus'] as String? ?? 'free';
       final isPremium = subscriptionStatus == 'premium';
 
-        final carrots = userData['carrots'] as Map<String, dynamic>? ?? {};
-        final currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
+      final carrots = userData['carrots'] as Map<String, dynamic>? ?? {};
+      final currentCarrots = (carrots['current'] as num?)?.toInt() ?? 0;
 
       // Check balance (free users need >= 1 carrot)
       if (!isPremium && currentCarrots < 1) {

@@ -1,4 +1,4 @@
-import admin from 'firebase-admin';
+import admin from "firebase-admin";
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -18,11 +18,15 @@ function parseJsonEnv(name) {
 }
 
 async function main() {
-  const projectId = requireEnv('FIREBASE_PROJECT_ID');
-  const serviceAccount = parseJsonEnv('SERVICE_ACCOUNT_JSON');
+  const projectId = requireEnv("FIREBASE_PROJECT_ID");
+  const serviceAccount = parseJsonEnv("SERVICE_ACCOUNT_JSON");
 
-  const dryRun = String(process.env.DRY_RUN || 'false').toLowerCase() === 'true';
-  const pageSize = Math.min(Math.max(parseInt(process.env.PAGE_SIZE || '200', 10) || 200, 1), 500);
+  const dryRun =
+    String(process.env.DRY_RUN || "false").toLowerCase() === "true";
+  const pageSize = Math.min(
+    Math.max(parseInt(process.env.PAGE_SIZE || "200", 10) || 200, 1),
+    500
+  );
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -36,12 +40,14 @@ async function main() {
   let updatedUsers = 0;
   let lastDoc = null;
 
-  console.log(`Weekly carrot reset starting. dryRun=${dryRun} pageSize=${pageSize}`);
+  console.log(
+    `Weekly carrot reset starting. dryRun=${dryRun} pageSize=${pageSize}`
+  );
 
   // Paginate by documentId for stable full-table scan.
   while (true) {
     let query = db
-      .collection('users')
+      .collection("users")
       .orderBy(admin.firestore.FieldPath.documentId())
       .limit(pageSize);
 
@@ -62,11 +68,14 @@ async function main() {
       lastDoc = doc;
 
       const data = doc.data() || {};
-      const subscriptionStatus = String(data.subscriptionStatus || 'free').toLowerCase();
-      const isPremium = subscriptionStatus === 'premium';
+      const subscriptionStatus = String(
+        data.subscriptionStatus || "free"
+      ).toLowerCase();
+      const isPremium = subscriptionStatus === "premium";
       if (isPremium) continue;
 
-      const carrots = (data.carrots && typeof data.carrots === 'object') ? data.carrots : {};
+      const carrots =
+        data.carrots && typeof data.carrots === "object" ? data.carrots : {};
       const max = Number.isFinite(carrots.max) ? Math.trunc(carrots.max) : 5;
 
       eligibleUsers += 1;
@@ -74,18 +83,18 @@ async function main() {
       if (dryRun) continue;
 
       const userRef = doc.ref;
-      const txRef = userRef.collection('transactions').doc();
+      const txRef = userRef.collection("transactions").doc();
 
       batch.update(userRef, {
-        'carrots.current': max,
-        'carrots.lastResetAt': admin.firestore.FieldValue.serverTimestamp(),
-        'updatedAt': admin.firestore.FieldValue.serverTimestamp(),
+        "carrots.current": max,
+        "carrots.lastResetAt": admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       batch.set(txRef, {
-        type: 'reset',
+        type: "reset",
         amount: max,
         balanceAfter: max,
-        description: 'Weekly carrot refresh',
+        description: "Weekly carrot refresh",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -104,10 +113,14 @@ async function main() {
       await batch.commit();
     }
 
-    console.log(`Progress: scanned=${scannedUsers} eligible=${eligibleUsers} updated=${updatedUsers}`);
+    console.log(
+      `Progress: scanned=${scannedUsers} eligible=${eligibleUsers} updated=${updatedUsers}`
+    );
   }
 
-  console.log(`Done. scanned=${scannedUsers} eligible=${eligibleUsers} updated=${updatedUsers} dryRun=${dryRun}`);
+  console.log(
+    `Done. scanned=${scannedUsers} eligible=${eligibleUsers} updated=${updatedUsers} dryRun=${dryRun}`
+  );
 }
 
 main().catch((err) => {
