@@ -60,7 +60,7 @@ class HomeScreen extends ConsumerWidget {
             final totalCarrotsSpent = userProfile.stats.totalCarrotsSpent;
             final subscription = userProfile.subscriptionStatus.toLowerCase();
             final isPremium =
-                subscription == 'premium' || subscription == 'pro';
+                subscription == 'premium';
 
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 28.0),
