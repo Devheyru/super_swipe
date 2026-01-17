@@ -38,7 +38,7 @@ Super Swipe is a mobile application that revolutionizes meal planning by combini
 
 ## 📱 Screenshots
 
-_(Add your app screenshots here)_
+### Add your app screenshots here
 
 ![Screenshot 1](assets/images/screenshot-1.jpg)
 ![Screenshot 2](assets/images/screenshot-2.jpg)
