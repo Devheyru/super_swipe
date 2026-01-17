@@ -88,6 +88,7 @@ class PantryFirstSwipeDeckController
           )
           .then((didRefill) async {
             if (!didRefill) return;
+            if (!ref.mounted) return;
             await refresh();
           }),
     );
